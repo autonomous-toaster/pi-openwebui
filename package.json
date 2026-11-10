@@ -1,0 +1,23 @@
+{
+  "name": "pi-openwebui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi extension exposing Open WebUI notes, knowledge bases, memories and skills to the Pi coding agent",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./extension/index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^1.5.1",
+    "@earendil-works/pi-coding-agent": "^1.5.1",
+    "@types/node": "^22.20.5",
+    "typebox": "^1.4.6",
+    "typescript": "^5.9.3"
+  }
+}
