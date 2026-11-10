@@ -310,7 +310,7 @@ export function registerKnowledgeTool(pi: ExtensionAPI, client: OwuiClient, conf
 							action,
 							[
 								`Open WebUI accepted the files but indexed none of them into ${params.kb}.`,
-								"This is what happens when a file has no extractable text (scanned PDF, images). Open WebUI's extraction engine handles plain text and text-layer PDFs; scanned documents need tika or docling selected in Admin → Documents.",
+								"Two causes, both silent in the HTTP response: the same content is already indexed in this base (duplicates are rejected), or nothing could be extracted (scanned PDF, image). Scanned documents need tika or docling selected in Admin → Documents.",
 								skipped.length ? `Skipped: ${skipped.join(", ")}` : "",
 							]
 								.filter(Boolean)
