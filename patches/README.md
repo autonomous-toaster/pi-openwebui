@@ -27,3 +27,18 @@ Re-running on a patched file prints `already patched` and exits 0. If upstream r
 
 **Check**: `docker logs open-webui | grep "agent display_file ->"` after an agent calls the
 tool.
+
+## `agent_tasks.py` — Open WebUI
+
+**What**: `Output.tool()` emits `{"type": "chat:message:tasks", "data": {"tasks": […]}}` when
+an agent tool named `set_tasks` completes, which is what the frontend renders as a checklist.
+
+**Why**: same gap as above — Open WebUI emits that event only for chat tools
+(`tools/builtin.py`), so agent runs had no visible progress.
+
+**Caveat**: the checklist is live page state, not history. Open WebUI keeps it in the
+component (`Chat.svelte`, `chatTasks`), so a reload loses it. Persisting it would need a
+frontend change as well.
+
+Apply it after the display patch, with the same `RUN` line style; it inserts before
+`Output.approve` and is idempotent.

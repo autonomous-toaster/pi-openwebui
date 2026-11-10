@@ -18,6 +18,8 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
 | `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
 | `display_file` | — | Opens a workspace file in Open WebUI's file panel, or renders it inline with `inline: true` (needs `patches/`) |
+| `set_tasks` | — | Publishes a live task checklist into the Open WebUI chat (needs `patches/`) |
+| `owui_skill` | `list`, `read`, `create`, `update` | Publishes procedures back into Open WebUI's skill library |
 | `owui_chat` | `current`, `rename` | Finds its own conversation by matching `PI_SESSION_ID` against `meta.agent.session_id` |
 
 ## Resources (skills + prompt templates)
