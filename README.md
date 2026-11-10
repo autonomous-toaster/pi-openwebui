@@ -17,6 +17,7 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Read/write, mirroring the `/api/v1/memories` surface |
 | `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
 | `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
+| `owui_display` | — | Shows a workspace file in the chat through `/static/shared`, no upload |
 
 ## Resources (skills + prompt templates)
 
@@ -148,9 +149,13 @@ Discovered while building against 0.13.3 — each of these is a real trap:
   `confirm` and `editor` onto its `ask_user` UI. So `owui_ask` needs no Open WebUI
   change — but a *custom Open WebUI tool* could not do it: those run in Open WebUI's chat
   pipeline and are never callable from the terminal agent.
-- **`display_file` stays out of reach**: Pi has no "show this file" UI method, and Open
-  WebUI resolves terminal files against the rendered chat. Uploading the file with
-  `/api/v1/files/` and returning a link is the workable substitute, if ever needed.
+- **`display_file` works without uploading.** Open WebUI serves `/static` publicly and
+  unauthenticated, so mounting a per-user folder read-only there exposes it to the chat:
+  `-v <host>/terminals/<user-id>/shared:/app/backend/open_webui/static/shared:ro`.
+  `owui_display` links a file into that folder (hard link, no copy) and returns markdown;
+  images render inline, everything else becomes a link. Set `OPEN_WEBUI_PUBLIC_URL` to the
+  address the *browser* uses, since the container name is not reachable from it.
+  Caveat: that URL needs no auth — keep the folder to files you are happy to serve.
 
 ## Troubleshooting
 
