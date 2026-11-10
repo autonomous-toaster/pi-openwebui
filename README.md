@@ -1,107 +1,110 @@
 # pi-openwebui
 
-A Pi extension that exposes Open WebUI to the Pi coding agent: **notes**, **knowledge
-bases**, **memories**, and Open WebUI **skills / prompt templates** loaded as native Pi
-resources.
+Exposes Open WebUI to the Pi coding agent — notes, knowledge bases, memories, web search,
+skills, MCP servers — and lets the agent act on the conversation it is running in.
 
-Built for [Open WebUI](https://github.com/open-webui/open-webui) ≥ 0.13, where coding
-agents run inside an `open-terminal` workspace and only receive a prompt — no tools, no
-RAG, no skills. This extension closes that gap from the agent side.
+Built for Open WebUI ≥ 0.13, where a coding agent runs inside an `open-terminal` workspace
+and receives only a prompt: no tools, no RAG, no skills. This closes that gap from the
+agent side.
 
 ## Tools
 
 | Tool | Actions | Notes |
 |---|---|---|
-| `owui_notes` | `list`, `search`, `read`, `create`, `append` | Reads are sliced (`offset`/`limit`); append passes the page revision so a concurrent browser edit returns 409 instead of being clobbered |
-| `owui_knowledge` | `list`, `files`, `search`, `read`, `query`, `create`, `add`, `remove`, `delete` | `search` is free SQL `LIKE`, `query` is vector retrieval and costs one embedding call; `add` indexes workspace files, which costs embeddings for their content |
-| `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Read/write, mirroring the `/api/v1/memories` surface |
-| `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
+| `owui_notes` | `list`, `search`, `read`, `create`, `append` | Reads are sliced; append passes the page revision so a browser edit wins with a 409 |
+| `owui_knowledge` | `list`, `files`, `search`, `read`, `query`, `create`, `add`, `remove`, `delete` | `search` is free SQL `LIKE`, `query` is vector retrieval, `add` indexes workspace files (costs embeddings); `delete` refuses unless the name is repeated back |
+| `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Mirror of `/api/v1/memories` |
+| `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader |
 | `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
-| `display_file` | — | Opens a workspace file in Open WebUI's file panel, or renders it inline with `inline: true` (needs `patches/`) |
-| `set_tasks` | — | Publishes a live task checklist into the Open WebUI chat (needs `patches/`) |
-| `owui_skill` | `list`, `read`, `create`, `update` | Publishes procedures back into Open WebUI's skill library |
-| `owui_chat` | `current`, `rename` | Finds its own conversation by matching `PI_SESSION_ID` against `meta.agent.session_id` |
+| `owui_chat` | `current`, `rename` | Finds its own conversation by matching the Pi session id |
+| `owui_skill` | `list`, `read`, `create`, `update` | Publishes procedures into Open WebUI's skill library |
+| `display_file` | — | Opens a workspace file in Open WebUI's file panel, or `inline: true` |
+| `set_tasks` | — | Publishes a live task checklist in the chat |
+
+`display_file` and `set_tasks` need the patches described below; everything else works
+against an unpatched instance.
 
 ## MCP servers from Open WebUI
 
 Open WebUI keeps MCP servers in its tool-server configuration. The extension reads
-`GET /api/v1/configs/tool_servers`, keeps the `type: "mcp"` entries that are enabled, and
-registers them with Pi **while loading**, so they connect with any `mcp.json` servers at
-session start. One definition then serves both sides, and nothing is written to disk.
+`GET /api/v1/configs/tool_servers`, keeps the enabled `type: "mcp"` entries, and registers
+them with Pi **while loading**, so they connect with any `mcp.json` servers at session
+start. One definition serves both sides and nothing is written to disk.
 
-Servers registered this way get `codemode` exposure: their tools stay out of the prompt and
-scripts reach them through `searchTools()`/`describeTool()`. Set `OPEN_WEBUI_MCP=off` to
-skip the bridge, and name any server in `mcp.json` to override a registration.
+They get `codemode` exposure: their tools stay out of the prompt and scripts reach them via
+`searchTools()`/`describeTool()` as `mcp__<server>__<tool>`. Set `OPEN_WEBUI_MCP=off` to skip
+the bridge; a server named in `~/.pi/agent/mcp.json` overrides the registration.
 
-**Limitation**: OAuth-backed servers keep their token inside Open WebUI's OAuth client
-manager, so they are skipped — Pi has to authenticate those itself (`pi mcp add`). Run
-`/openwebui` to see what was registered and what was skipped.
+OAuth-backed servers are skipped — their token lives in Open WebUI's OAuth client manager,
+so Pi has to authenticate those itself (`pi mcp add`). `/openwebui` lists what was
+registered and what was skipped.
 
 ## Resources (skills + prompt templates)
 
-On startup the extension materializes Open WebUI skills into `~/.cache/pi-openwebui/skills/`
-and hands the directory to Pi through the documented `resources_discover` event. Pi then
-advertises each skill by name/description (lazy: `SKILL.md` is only read when the task
-matches) and supports `/skill:<name>`. Open WebUI prompt templates become Pi `/commands`
-via the same mechanism.
+On startup the extension materializes Open WebUI skills into
+`~/.cache/pi-openwebui/skills/` and hands the directory to Pi through `resources_discover`.
+Pi then advertises each skill by name and description and loads `SKILL.md` only when the
+task matches. Open WebUI prompt templates become Pi `/commands` the same way.
 
-Skill trees are copied whole — `SKILL.md`, `reference.md`, `scripts/*.py`, … — with a
-`description` frontmatter added when Open WebUI stores it in a column rather than in the
-file (its SKILL.md files usually have no frontmatter).
+Trees are copied whole (including `scripts/`), with a `description` frontmatter injected
+when Open WebUI keeps it in a column rather than in the file.
 
 ## Configuration (environment only)
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OPEN_WEBUI_API_KEY` | — | **Required.** A user API key (`sk-…`) from Settings → Account → API keys |
+| `OPEN_WEBUI_API_KEY` | — | **Required.** A user API key (`sk-…`) |
 | `OPEN_WEBUI_BASE_URL` | `http://localhost:3000` | Open WebUI base URL |
 | `OPEN_WEBUI_MAX_CHARS` | `12000` | Max characters per read/query result |
 | `OPEN_WEBUI_TIMEOUT_MS` | `60000` | Per-request timeout |
 | `OPEN_WEBUI_MCP` | `on` | Register Open WebUI's MCP servers with Pi |
-| `OPEN_WEBUI_RESOURCES` | `on` | Materialize skills/prompts (`off` disables) |
-| `OPEN_WEBUI_RESOURCES_TTL_MIN` | `15` | Cache lifetime before re-fetching skills |
-| `OPEN_WEBUI_DEBUG` | `off` | Log discovery details to stderr |
+| `OPEN_WEBUI_RESOURCES` | `on` | Materialize skills and prompts |
+| `OPEN_WEBUI_RESOURCES_TTL_MIN` | `15` | Skill cache lifetime |
+| `OPEN_WEBUI_DEBUG` | `off` | Log discovery detail to stderr |
 
-There is deliberately **no key file fallback**: the extension reads the environment, and
-how the key reaches the process is a deployment concern. Without a key it registers no
-tools and warns once.
+There is deliberately **no key file fallback**: the extension reads the environment, and how
+the key reaches the process is a deployment concern. Without a key it registers no tools
+and warns once.
 
 ## Install
 
-Local checkout (what this repo is tested with):
-
 ```bash
-pi -e /path/to/pi-openwebui
-```
-
-As a package:
-
-```bash
+pi -e /path/to/pi-openwebui          # local checkout
 pi install git:github.com/autonomous-toaster/pi-openwebui@v0.1.0
 ```
 
-Inside an `open-terminal` image, copy the repo in and either add `-e /path/to/repo` to the
-Pi arguments or list it in `~/.pi/agent/settings.json`:
+Inside an `open-terminal` image, copy the repo in and list it in settings:
 
 ```json
-{ "packages": ["/opt/pi-openwebui"] }
+{ "extensions": ["/opt/pi-openwebui/extension/index.ts"] }
 ```
 
-## Acting on the running conversation
+## Patching Open WebUI
 
-`owui_chat` renames the chat the agent is in, without being told which one. Open WebUI
-stores the Pi session id in every agent message (`meta.agent`, a JWT with a `session_id`
-claim), and Pi exposes the same value as `PI_SESSION_ID`, so the tool lists the user's
-recent chats and matches that claim. Rename is a title-only
-`POST /api/v1/chats/{id}` with `{"chat": {"title": ...}}`.
+Two behaviours only exist for Open WebUI's own chat tools, so agents never had them. Both
+patches target `Output.tool()`, the single choke point for agent tool results, and are
+idempotent and fail loudly if upstream moves the anchor.
 
-If the match fails (local Pi session, more than a handful of chats), pass `chat_id`
-explicitly.
+| Patch | Effect |
+|---|---|
+| `patches/agent_display_file.py` | emits `terminal:display_file`, which opens the file panel |
+| `patches/agent_tasks.py` | emits `chat:message:tasks`, which renders a task checklist |
+
+```dockerfile
+FROM open-webui:<your-tag>
+USER root
+COPY pi-openwebui/patches/agent_display_file.py /tmp/
+COPY pi-openwebui/patches/agent_tasks.py /tmp/
+RUN python3 /tmp/agent_display_file.py /app/backend/open_webui/utils/agents/output.py \
+ && python3 /tmp/agent_tasks.py /app/backend/open_webui/utils/agents/output.py \
+ && rm -f /tmp/agent_*.py \
+ && python3 -m py_compile /app/backend/open_webui/utils/agents/output.py
+```
+
+The checklist is live page state, not history: Open WebUI keeps it in the component, so a
+reload loses it. Persisting it would need a frontend change too.
 
 ## Running inside an open-terminal workspace
-
-The image used by the agent container bakes the package at `/opt/pi-openwebui` and seeds
-the per-user config on start:
 
 ```dockerfile
 COPY pi-openwebui /opt/pi-openwebui
@@ -112,391 +115,85 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/seed-pi-config.sh"]
 USER user
 ```
 
-`seed-pi-config.sh` adds `"extensions": ["/opt/pi-openwebui/extension/index.ts"]` to
-`/home/user/.pi/agent/settings.json` (idempotent, preserves other keys) and then execs the
-upstream entrypoint.
+The seed script adds `"extensions": ["/opt/pi-openwebui/extension/index.ts"]` and
+`"defaultTools": ["+codemode"]` to `/home/user/.pi/agent/settings.json` (idempotent,
+preserves other keys), sources `/home/user/.pi/agent/env` for per-user variables, then
+execs the upstream entrypoint.
 
 Three things bite here:
 
 - **`USER user` matters.** Without it the workspace runs as root, `HOME=/root`, and Pi
-  reads `/root/.pi/agent` — an ephemeral directory, so the seeded settings and any
-  per-user `models.json` are silently ignored.
-- **`PI_CODING_AGENT_DIR` pins Pi's config** to the bind-mounted home regardless of how
-  the container is launched.
-- **Local paths go in `extensions`, not `packages`.** `packages` takes `npm:`/`git:`
-  specs; an absolute path there is ignored without any warning.
-
-The API key is not baked in: Terminals policy env is per *instance*, not per user, so a
-static key there would make every user's agent act as one account. How the per-user key
-reaches the process is a deployment decision (see the note at the top of `config.ts`).
-
-## Tests
-
-Both scripts run without Pi: they hand the extension a recorder that mimics
-`ExtensionAPI` and call each tool's `execute()`.
-
-```bash
-export OPEN_WEBUI_BASE_URL=http://192.168.1.18:3000
-export OPEN_WEBUI_API_KEY=$(cat /tmp/owui_test_key)
-
-node test/smoke.ts    # read paths + resources_discover (set OPEN_WEBUI_TEST_NOTE / _KB for more)
-node test/write.ts    # creates and deletes a throwaway note + memory
-```
-
-Verified against Open WebUI 0.13.3: 3 tools, 6–7 skills materialized (one collided with a
-host skill and was correctly shadowed), semantic retrieval, note create/append, memory
-add/update/delete.
-
-## API details worth knowing
-
-Discovered while building against 0.13.3 — each of these is a real trap:
-
-- **Trailing slashes matter.** `/api/v1/skills` is served by the SPA catch-all (HTTP 200,
-  HTML); `/api/v1/skills/` hits the router.
-- **Skill file contents are raw bytes**, not JSON: `GET /api/v1/skills/id/{id}/files/content?path=&version_id=`
-  returns the file itself with its own media type, and `version_id` is mandatory.
-- **Skill list omits `content`**; only `GET /api/v1/skills/id/{id}` includes it.
-- **Knowledge vector collections are named by the raw knowledge id**, not `knowledge_<id>`.
-- **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
-  editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
-  markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
-- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
-  whatever text the upload already extracted, so a file uploaded with `process=false`, or
-  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
-  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
-- **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
-  normalise.
-- **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
-  drop the skill silently.
-- **Hybrid search flips the score meaning.** With `ENABLE_RAG_HYBRID_SEARCH` on,
-  `query/collection` returns relevance scores in 0..1 (higher is better); with it off it
-  returns cosine distances (lower is better). `owui_knowledge query` reads
-  `/api/v1/retrieval/config` once and labels the number accordingly.
-- **Web search is a chat builtin, not an endpoint.** `/api/v1/retrieval/process/web/search`
-  is the closest HTTP equivalent: it uses the same engine and permission checks, and with
-  `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL` off it embeds the loaded pages into a
-  `web-search-<user>-<hash>` collection (one embedding call per distinct query).
-  `/api/v1/retrieval/process/url?process=false` extracts a single page with no side effect.
-- **`ask_user` is reachable after all, from the Pi side.** Pi's dialogs are a
-  request/response sub-protocol (`extension_ui_request` / `extension_ui_response`), and
-  Open WebUI's Pi transport (`utils/agents/pi.py`) already maps `select`, `input`,
-  `confirm` and `editor` onto its `ask_user` UI. So `owui_ask` needs no Open WebUI
-  change — but a *custom Open WebUI tool* could not do it: those run in Open WebUI's chat
-  pipeline and are never callable from the terminal agent.
-- **`display_file` uses Open WebUI's own file panel.** The backend emits
-  `terminal:display_file` and the frontend opens its panel, fetching the bytes from the
-  terminal server with the token it already holds — no upload, no proxy, no public
-  directory. That emission only existed for chat tool-server calls, so an agent tool named
-  `display_file` showed a card instead; `patches/agent_display_file.py` adds the same
-  emission to `Output.tool()` (the choke point for every agent provider). The panel needs
-  `terminalFileDisplay = "sidebar"` (the default) unless the tool is called with
-  `inline: true`, which mirrors the chat tool path: the result is rendered in the reply and
-  the panel is left alone. Without the patch the tool is harmless but only renders a card.
+  reads an ephemeral `/root/.pi/agent` — the seeded settings and any per-user `models.json`
+  are silently ignored.
+- **`PI_CODING_AGENT_DIR` pins Pi's config** to the bind-mounted home whatever the launch.
+- **Local paths go in `extensions`, not `packages`.** `packages` takes `npm:`/`git:` specs;
+  an absolute path there is ignored without a warning.
 
 ## Acting on the running conversation
 
-`owui_chat` renames the chat the agent is in, without being told which one. Open WebUI
+`owui_chat` renames the chat the agent is in without being told which one: Open WebUI
 stores the Pi session id in every agent message (`meta.agent`, a JWT with a `session_id`
-claim), and Pi exposes the same value as `PI_SESSION_ID`, so the tool lists the user's
-recent chats and matches that claim. Rename is a title-only
-`POST /api/v1/chats/{id}` with `{"chat": {"title": ...}}`.
+claim), and `ctx.sessionManager.getSessionId()` returns the same value, so the tool matches
+it against recent chats. Rename is a title-only `POST /api/v1/chats/{id}`.
 
-If the match fails (local Pi session, more than a handful of chats), pass `chat_id`
-explicitly.
-
-## Running inside an open-terminal workspace
-
-The image used by the agent container bakes the package at `/opt/pi-openwebui` and seeds
-the per-user config on start:
-
-```dockerfile
-COPY pi-openwebui /opt/pi-openwebui
-COPY seed-pi-config.sh /usr/local/bin/seed-pi-config.sh
-ENV OPEN_WEBUI_BASE_URL=http://open-webui:8080 \
-    PI_CODING_AGENT_DIR=/home/user/.pi/agent
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/seed-pi-config.sh"]
-USER user
-```
-
-`seed-pi-config.sh` adds `"extensions": ["/opt/pi-openwebui/extension/index.ts"]` to
-`/home/user/.pi/agent/settings.json` (idempotent, preserves other keys) and then execs the
-upstream entrypoint.
-
-Three things bite here:
-
-- **`USER user` matters.** Without it the workspace runs as root, `HOME=/root`, and Pi
-  reads `/root/.pi/agent` — an ephemeral directory, so the seeded settings and any
-  per-user `models.json` are silently ignored.
-- **`PI_CODING_AGENT_DIR` pins Pi's config** to the bind-mounted home regardless of how
-  the container is launched.
-- **Local paths go in `extensions`, not `packages`.** `packages` takes `npm:`/`git:`
-  specs; an absolute path there is ignored without any warning.
-
-The API key is not baked in: Terminals policy env is per *instance*, not per user, so a
-static key there would make every user's agent act as one account. How the per-user key
-reaches the process is a deployment decision (see the note at the top of `config.ts`).
+`PI_SESSION_ID` is injected into bash commands, not into the extension process — hence the
+session manager.
 
 ## Tests
 
-Both scripts run without Pi: they hand the extension a recorder that mimics
-`ExtensionAPI` and call each tool's `execute()`.
+Both scripts drive the tool `execute()` functions with a recorder standing in for
+`ExtensionAPI`, so they need neither Pi nor a model.
 
 ```bash
-export OPEN_WEBUI_BASE_URL=http://192.168.1.18:3000
-export OPEN_WEBUI_API_KEY=$(cat /tmp/owui_test_key)
+export OPEN_WEBUI_BASE_URL=http://<host>:3000
+export OPEN_WEBUI_API_KEY=$(cat /path/to/key)
 
-node test/smoke.ts    # read paths + resources_discover (set OPEN_WEBUI_TEST_NOTE / _KB for more)
-node test/write.ts    # creates and deletes a throwaway note + memory
+node test/smoke.ts     # read paths + resources_discover (OPEN_WEBUI_TEST_WEB=1 adds web)
+node test/write.ts     # creates and deletes a throwaway note and memory
 ```
-
-Verified against Open WebUI 0.13.3: 3 tools, 6–7 skills materialized (one collided with a
-host skill and was correctly shadowed), semantic retrieval, note create/append, memory
-add/update/delete.
 
 ## API details worth knowing
 
-Discovered while building against 0.13.3 — each of these is a real trap:
+Each of these cost real debugging time against 0.13.3:
 
 - **Trailing slashes matter.** `/api/v1/skills` is served by the SPA catch-all (HTTP 200,
   HTML); `/api/v1/skills/` hits the router.
-- **Skill file contents are raw bytes**, not JSON: `GET /api/v1/skills/id/{id}/files/content?path=&version_id=`
-  returns the file itself with its own media type, and `version_id` is mandatory.
+- **Skill file contents are raw bytes**, not JSON, and `version_id` is mandatory:
+  `GET /api/v1/skills/id/{id}/files/content?path=&version_id=`.
 - **Skill list omits `content`**; only `GET /api/v1/skills/id/{id}` includes it.
-- **Knowledge vector collections are named by the raw knowledge id**, not `knowledge_<id>`.
-- **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
+- **Skills API contracts**: `create` with a file list must include `SKILL.md` at the root;
+  `update` with file `operations` is optimistic and needs `expected_version_id`.
+- **Knowledge collections are named by the raw knowledge id**, not `knowledge_<id>`.
+- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
+  whatever text the upload already extracted, so uploads must use
+  `process=true&process_in_background=false`, and duplicate content is rejected silently
+  with the same empty result. The tool verifies by re-listing.
+- **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`. The
   editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
   markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
-- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
-  whatever text the upload already extracted, so a file uploaded with `process=false`, or
-  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
-  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
-- **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
-  normalise.
+- **Hybrid search flips the score meaning.** With `ENABLE_RAG_HYBRID_SEARCH` on,
+  `query/collection` returns relevance in 0..1 (higher is better); off, it returns cosine
+  distance (lower is better). The tool reads the config and labels accordingly.
+- **Web search is a chat builtin, not an endpoint.** `/retrieval/process/web/search` is the
+  closest HTTP equivalent and embeds loaded pages into a `web-search-<user>-<hash>`
+  collection when the bypass flag is off; `/retrieval/process/url?process=false` extracts
+  one page with no side effect.
+- **`ask_user` is reachable from the Pi side.** Pi's dialogs are a request/response
+  sub-protocol and Open WebUI's Pi transport already maps `select`, `input`, `confirm` and
+  `editor` onto its `ask_user` UI. A custom Open WebUI tool could not do this: those run in
+  the chat pipeline and are never callable from the agent.
+- **Epoch units vary** (seconds, ms, ns) across resources.
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
   drop the skill silently.
-- **Hybrid search flips the score meaning.** With `ENABLE_RAG_HYBRID_SEARCH` on,
-  `query/collection` returns relevance scores in 0..1 (higher is better); with it off it
-  returns cosine distances (lower is better). `owui_knowledge query` reads
-  `/api/v1/retrieval/config` once and labels the number accordingly.
-- **Web search is a chat builtin, not an endpoint.** `/api/v1/retrieval/process/web/search`
-  is the closest HTTP equivalent: it uses the same engine and permission checks, and with
-  `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL` off it embeds the loaded pages into a
-  `web-search-<user>-<hash>` collection (one embedding call per distinct query).
-  `/api/v1/retrieval/process/url?process=false` extracts a single page with no side effect.
-- **`ask_user` is reachable after all, from the Pi side.** Pi's dialogs are a
-  request/response sub-protocol (`extension_ui_request` / `extension_ui_response`), and
-  Open WebUI's Pi transport (`utils/agents/pi.py`) already maps `select`, `input`,
-  `confirm` and `editor` onto its `ask_user` UI. So `owui_ask` needs no Open WebUI
-  change — but a *custom Open WebUI tool* could not do it: those run in Open WebUI's chat
-  pipeline and are never callable from the terminal agent.
-- **`display_file` is deliberately not implemented.** Every route to it is worse than not
-  having it: Open WebUI's `/static` is world-readable, uploading to `/api/v1/files/` leaves
-  copies with no cleanup, and a signed URL is a bearer token that opens in incognito. The
-  only correct version is a separate authenticated file proxy, which makes a display tool
-  depend on a second service, a matching origin and cookie scope — too much machinery for
-  showing a file. Agents can still return paths, and the user can open them in the
-  workspace.
 
-## Acting on the running conversation
-
-`owui_chat` renames the chat the agent is in, without being told which one. Open WebUI
-stores the Pi session id in every agent message (`meta.agent`, a JWT with a `session_id`
-claim), and Pi exposes the same value as `PI_SESSION_ID`, so the tool lists the user's
-recent chats and matches that claim. Rename is a title-only
-`POST /api/v1/chats/{id}` with `{"chat": {"title": ...}}`.
-
-If the match fails (local Pi session, more than a handful of chats), pass `chat_id`
-explicitly.
-
-## Running inside an open-terminal workspace
-
-The image used by the agent container bakes the package at `/opt/pi-openwebui` and seeds
-the per-user config on start:
-
-```dockerfile
-COPY pi-openwebui /opt/pi-openwebui
-COPY seed-pi-config.sh /usr/local/bin/seed-pi-config.sh
-ENV OPEN_WEBUI_BASE_URL=http://open-webui:8080 \
-    PI_CODING_AGENT_DIR=/home/user/.pi/agent
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/seed-pi-config.sh"]
-USER user
-```
-
-`seed-pi-config.sh` adds `"extensions": ["/opt/pi-openwebui/extension/index.ts"]` to
-`/home/user/.pi/agent/settings.json` (idempotent, preserves other keys) and then execs the
-upstream entrypoint.
-
-Three things bite here:
-
-- **`USER user` matters.** Without it the workspace runs as root, `HOME=/root`, and Pi
-  reads `/root/.pi/agent` — an ephemeral directory, so the seeded settings and any
-  per-user `models.json` are silently ignored.
-- **`PI_CODING_AGENT_DIR` pins Pi's config** to the bind-mounted home regardless of how
-  the container is launched.
-- **Local paths go in `extensions`, not `packages`.** `packages` takes `npm:`/`git:`
-  specs; an absolute path there is ignored without any warning.
-
-The API key is not baked in: Terminals policy env is per *instance*, not per user, so a
-static key there would make every user's agent act as one account. How the per-user key
-reaches the process is a deployment decision (see the note at the top of `config.ts`).
-
-## Tests
-
-Both scripts run without Pi: they hand the extension a recorder that mimics
-`ExtensionAPI` and call each tool's `execute()`.
-
-```bash
-export OPEN_WEBUI_BASE_URL=http://192.168.1.18:3000
-export OPEN_WEBUI_API_KEY=$(cat /tmp/owui_test_key)
-
-node test/smoke.ts    # read paths + resources_discover (set OPEN_WEBUI_TEST_NOTE / _KB for more)
-node test/write.ts    # creates and deletes a throwaway note + memory
-```
-
-Verified against Open WebUI 0.13.3: 3 tools, 6–7 skills materialized (one collided with a
-host skill and was correctly shadowed), semantic retrieval, note create/append, memory
-add/update/delete.
-
-## API details worth knowing
-
-Discovered while building against 0.13.3 — each of these is a real trap:
-
-- **Trailing slashes matter.** `/api/v1/skills` is served by the SPA catch-all (HTTP 200,
-  HTML); `/api/v1/skills/` hits the router.
-- **Skill file contents are raw bytes**, not JSON: `GET /api/v1/skills/id/{id}/files/content?path=&version_id=`
-  returns the file itself with its own media type, and `version_id` is mandatory.
-- **Skill list omits `content`**; only `GET /api/v1/skills/id/{id}` includes it.
-- **Knowledge vector collections are named by the raw knowledge id**, not `knowledge_<id>`.
-- **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
-  editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
-  markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
-- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
-  whatever text the upload already extracted, so a file uploaded with `process=false`, or
-  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
-  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
-- **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
-  normalise.
-- **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
-  drop the skill silently.
-- **Hybrid search flips the score meaning.** With `ENABLE_RAG_HYBRID_SEARCH` on,
-  `query/collection` returns relevance scores in 0..1 (higher is better); with it off it
-  returns cosine distances (lower is better). `owui_knowledge query` reads
-  `/api/v1/retrieval/config` once and labels the number accordingly.
-- **Web search is a chat builtin, not an endpoint.** `/api/v1/retrieval/process/web/search`
-  is the closest HTTP equivalent: it uses the same engine and permission checks, and with
-  `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL` off it embeds the loaded pages into a
-  `web-search-<user>-<hash>` collection (one embedding call per distinct query).
-  `/api/v1/retrieval/process/url?process=false` extracts a single page with no side effect.
-- **`ask_user` is reachable after all, from the Pi side.** Pi's dialogs are a
-  request/response sub-protocol (`extension_ui_request` / `extension_ui_response`), and
-  Open WebUI's Pi transport (`utils/agents/pi.py`) already maps `select`, `input`,
-  `confirm` and `editor` onto its `ask_user` UI. So `owui_ask` needs no Open WebUI
-  change — but a *custom Open WebUI tool* could not do it: those run in Open WebUI's chat
-  pipeline and are never callable from the terminal agent.
-## Acting on the running conversation
-
-`owui_chat` renames the chat the agent is in, without being told which one. Open WebUI
-stores the Pi session id in every agent message (`meta.agent`, a JWT with a `session_id`
-claim), and Pi exposes the same value as `PI_SESSION_ID`, so the tool lists the user's
-recent chats and matches that claim. Rename is a title-only
-`POST /api/v1/chats/{id}` with `{"chat": {"title": ...}}`.
-
-If the match fails (local Pi session, more than a handful of chats), pass `chat_id`
-explicitly.
-
-## Running inside an open-terminal workspace
-
-The image used by the agent container bakes the package at `/opt/pi-openwebui` and seeds
-the per-user config on start:
-
-```dockerfile
-COPY pi-openwebui /opt/pi-openwebui
-COPY seed-pi-config.sh /usr/local/bin/seed-pi-config.sh
-ENV OPEN_WEBUI_BASE_URL=http://open-webui:8080 \
-    PI_CODING_AGENT_DIR=/home/user/.pi/agent
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/seed-pi-config.sh"]
-USER user
-```
-
-`seed-pi-config.sh` adds `"extensions": ["/opt/pi-openwebui/extension/index.ts"]` to
-`/home/user/.pi/agent/settings.json` (idempotent, preserves other keys) and then execs the
-upstream entrypoint.
-
-Three things bite here:
-
-- **`USER user` matters.** Without it the workspace runs as root, `HOME=/root`, and Pi
-  reads `/root/.pi/agent` — an ephemeral directory, so the seeded settings and any
-  per-user `models.json` are silently ignored.
-- **`PI_CODING_AGENT_DIR` pins Pi's config** to the bind-mounted home regardless of how
-  the container is launched.
-- **Local paths go in `extensions`, not `packages`.** `packages` takes `npm:`/`git:`
-  specs; an absolute path there is ignored without any warning.
-
-The API key is not baked in: Terminals policy env is per *instance*, not per user, so a
-static key there would make every user's agent act as one account. How the per-user key
-reaches the process is a deployment decision (see the note at the top of `config.ts`).
-
-## Tests
-
-Both scripts run without Pi: they hand the extension a recorder that mimics
-`ExtensionAPI` and call each tool's `execute()`.
-
-```bash
-export OPEN_WEBUI_BASE_URL=http://192.168.1.18:3000
-export OPEN_WEBUI_API_KEY=$(cat /tmp/owui_test_key)
-
-node test/smoke.ts    # read paths + resources_discover (set OPEN_WEBUI_TEST_NOTE / _KB for more)
-node test/write.ts    # creates and deletes a throwaway note + memory
-```
-
-Verified against Open WebUI 0.13.3: 3 tools, 6–7 skills materialized (one collided with a
-host skill and was correctly shadowed), semantic retrieval, note create/append, memory
-add/update/delete.
-
-## API details worth knowing
-
-Discovered while building against 0.13.3 — each of these is a real trap:
-
-- **Trailing slashes matter.** `/api/v1/skills` is served by the SPA catch-all (HTTP 200,
-  HTML); `/api/v1/skills/` hits the router.
-- **Skill file contents are raw bytes**, not JSON: `GET /api/v1/skills/id/{id}/files/content?path=&version_id=`
-  returns the file itself with its own media type, and `version_id` is mandatory.
-- **Skill list omits `content`**; only `GET /api/v1/skills/id/{id}` includes it.
-- **Knowledge vector collections are named by the raw knowledge id**, not `knowledge_<id>`.
-- **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
-  editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
-  markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
-- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
-  whatever text the upload already extracted, so a file uploaded with `process=false`, or
-  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
-  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
-- **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
-  normalise.
-- **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
-  drop the skill silently.
-- **Hybrid search flips the score meaning.** With `ENABLE_RAG_HYBRID_SEARCH` on,
-  `query/collection` returns relevance scores in 0..1 (higher is better); with it off it
-  returns cosine distances (lower is better). `owui_knowledge query` reads
-  `/api/v1/retrieval/config` once and labels the number accordingly.
-- **Web search is a chat builtin, not an endpoint.** `/api/v1/retrieval/process/web/search`
-  is the closest HTTP equivalent: it uses the same engine and permission checks, and with
-  `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL` off it embeds the loaded pages into a
-  `web-search-<user>-<hash>` collection (one embedding call per distinct query).
-  `/api/v1/retrieval/process/url?process=false` extracts a single page with no side effect.
-- **`ask_user` is reachable after all, from the Pi side.** Pi's dialogs are a
-  request/response sub-protocol (`extension_ui_request` / `extension_ui_response`), and
-  Open WebUI's Pi transport (`utils/agents/pi.py`) already maps `select`, `input`,
-  `confirm` and `editor` onto its `ask_user` UI. So `owui_ask` needs no Open WebUI
-  change — but a *custom Open WebUI tool* could not do it: those run in Open WebUI's chat
-  pipeline and are never callable from the terminal agent.
 ## Troubleshooting
 
 - **`cannot reach Open WebUI … Request was cancelled` in a dev shell**: some hosts set
   `HTTP_PROXY`, and Pi's HTTP stack honours it, so LAN traffic gets proxied and stalls.
-  Run with `env -u HTTP_PROXY -u HTTPS_PROXY pi …`. Agent workspaces have no proxy.
-- **No tools at all**: `OPEN_WEBUI_API_KEY` is unset — Pi warns once and registers nothing.
-- **Skills missing**: `OPEN_WEBUI_DEBUG=on` logs discovery; check `~/.cache/pi-openwebui/skills`
-  and remember a name collision keeps the first skill discovered.
+  Run with `env -u HTTP_PROXY -u HTTPS_PROXY pi …`.
+- **No tools at all**: `OPEN_WEBUI_API_KEY` is unset.
+- **Skills missing**: `OPEN_WEBUI_DEBUG=on` logs discovery; check
+  `~/.cache/pi-openwebui/skills`. A name collision keeps the first skill discovered.
 
 ## License
 
