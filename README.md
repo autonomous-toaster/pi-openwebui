@@ -100,6 +100,15 @@ Discovered while building against 0.13.3 — each of these is a real trap:
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
   drop the skill silently.
 
+## Troubleshooting
+
+- **`cannot reach Open WebUI … Request was cancelled` in a dev shell**: some hosts set
+  `HTTP_PROXY`, and Pi's HTTP stack honours it, so LAN traffic gets proxied and stalls.
+  Run with `env -u HTTP_PROXY -u HTTPS_PROXY pi …`. Agent workspaces have no proxy.
+- **No tools at all**: `OPENWEBUI_API_KEY` is unset — Pi warns once and registers nothing.
+- **Skills missing**: `OPENWEBUI_DEBUG=on` logs discovery; check `~/.cache/pi-openwebui/skills`
+  and remember a name collision keeps the first skill discovered.
+
 ## License
 
 MIT

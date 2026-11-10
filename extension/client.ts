@@ -73,6 +73,7 @@ export class OwuiClient {
 
 	async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
 		const timeoutMs = options.timeoutMs ?? this.config.timeoutMs;
+		const startedAt = Date.now();
 		const signals = [AbortSignal.timeout(timeoutMs)];
 		if (options.signal) signals.push(options.signal);
 
@@ -89,11 +90,13 @@ export class OwuiClient {
 				signal: AbortSignal.any(signals),
 			});
 		} catch (err) {
+			const elapsed = Date.now() - startedAt;
 			if (options.signal?.aborted) throw new OwuiError(0, "cancelled");
-			throw new OwuiError(
-				0,
-				`cannot reach Open WebUI at ${this.config.baseUrl} (${describe(err)}; ${timeoutMs}ms timeout)`,
-			);
+			const reason =
+				err instanceof Error && err.name === "AbortError"
+					? `aborted after ${elapsed}ms (timeout budget ${timeoutMs}ms)`
+					: `${describe(err)} after ${elapsed}ms`;
+			throw new OwuiError(0, `cannot reach Open WebUI at ${this.config.baseUrl}: ${reason}`);
 		}
 
 		const body = await response.text();
