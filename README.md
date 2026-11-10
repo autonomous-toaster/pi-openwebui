@@ -15,6 +15,7 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_notes` | `list`, `search`, `read`, `create`, `append` | Reads are sliced (`offset`/`limit`); append passes the page revision so a concurrent browser edit returns 409 instead of being clobbered |
 | `owui_knowledge` | `list`, `files`, `search`, `read`, `query` | `search` is free SQL `LIKE`; `query` is vector retrieval and costs one embedding call |
 | `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Read/write, mirroring the `/api/v1/memories` surface |
+| `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
 
 ## Resources (skills + prompt templates)
 
@@ -64,6 +65,12 @@ Pi arguments or list it in `~/.pi/agent/settings.json`:
 ```json
 { "packages": ["/opt/pi-openwebui"] }
 ```
+
+## Open WebUI custom tools
+
+`owui-tools/` holds tools that run **inside** Open WebUI, versioned next to the extension
+that consumes Open WebUI's data. See `owui-tools/README.md` for the format, the install
+steps, and which builtins are deliberately not bridged.
 
 ## Running inside an open-terminal workspace
 
@@ -131,6 +138,18 @@ Discovered while building against 0.13.3 — each of these is a real trap:
   normalise.
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
   drop the skill silently.
+- **Hybrid search flips the score meaning.** With `ENABLE_RAG_HYBRID_SEARCH` on,
+  `query/collection` returns relevance scores in 0..1 (higher is better); with it off it
+  returns cosine distances (lower is better). `owui_knowledge query` reads
+  `/api/v1/retrieval/config` once and labels the number accordingly.
+- **Web search is a chat builtin, not an endpoint.** `/api/v1/retrieval/process/web/search`
+  is the closest HTTP equivalent: it uses the same engine and permission checks, and with
+  `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL` off it embeds the loaded pages into a
+  `web-search-<user>-<hash>` collection (one embedding call per distinct query).
+  `/api/v1/retrieval/process/url?process=false` extracts a single page with no side effect.
+- **Some builtins cannot be bridged**: `ask_user` needs `__event_call__` (browser event
+  channel) and `display_file` needs the chat's rendered state, so neither is reachable
+  from a terminal agent.
 
 ## Troubleshooting
 

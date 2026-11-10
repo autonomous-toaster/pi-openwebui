@@ -41,6 +41,20 @@ interface RetrievalResult {
 
 const ACTIONS = ["list", "files", "search", "read", "query"] as const;
 
+/**
+ * Hybrid search returns relevance scores (higher is better); plain vector search
+ * returns cosine distances (lower is better). Label accordingly so the model does not
+ * read a good match as a bad one.
+ */
+async function scoreLabel(client: OwuiClient): Promise<string> {
+	try {
+		const cfg = await client.get<{ ENABLE_RAG_HYBRID_SEARCH?: boolean }>("/api/v1/retrieval/config");
+		return cfg?.ENABLE_RAG_HYBRID_SEARCH ? "score" : "distance";
+	} catch {
+		return "score";
+	}
+}
+
 interface KnowledgeParams {
 	action?: unknown;
 	kb?: string;
@@ -193,12 +207,13 @@ export function registerKnowledgeTool(pi: ExtensionAPI, client: OwuiClient, conf
 					if (!documents.length) {
 						return ok(action, `No chunks retrieved for "${params.query}" (collections: ${collections.join(",")}).`);
 					}
+					const label = await scoreLabel(client);
 					const budgetPerChunk = Math.max(500, Math.floor(config.maxChars / documents.length));
 					const blocks = documents.map((doc, index) => {
 						const meta = metadatas[index] ?? {};
 						const source = String(meta.name ?? meta.file_id ?? "?");
 						const distance = distances[index];
-						const score = typeof distance === "number" ? ` distance=${distance.toFixed(3)}` : "";
+						const score = typeof distance === "number" ? ` ${label}=${distance.toFixed(3)}` : "";
 						const body = doc.length > budgetPerChunk ? `${doc.slice(0, budgetPerChunk)}…` : doc;
 						return `--- ${source}${score}\n${body}`;
 					});

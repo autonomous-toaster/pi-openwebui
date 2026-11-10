@@ -80,6 +80,12 @@ async function main() {
 
 	show("memory list", await call("owui_memory", { action: "list", limit: 5 }));
 
+	if (process.env.OPEN_WEBUI_TEST_WEB) {
+		// Costs one embedding call per search when the bypass flag is off.
+		show("web search", await call("owui_web", { action: "search", query: "open webui coding agents" }));
+		show("web fetch", await call("owui_web", { action: "fetch", url: "https://example.com", limit: 400 }));
+	}
+
 	const discover = handlers.get("resources_discover");
 	if (discover) {
 		const resources = (await discover({ cwd: process.cwd(), reason: "startup" }, { hasUI: false })) as {
