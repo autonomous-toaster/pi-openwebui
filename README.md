@@ -65,6 +65,38 @@ Pi arguments or list it in `~/.pi/agent/settings.json`:
 { "packages": ["/opt/pi-openwebui"] }
 ```
 
+## Running inside an open-terminal workspace
+
+The image used by the agent container bakes the package at `/opt/pi-openwebui` and seeds
+the per-user config on start:
+
+```dockerfile
+COPY pi-openwebui /opt/pi-openwebui
+COPY seed-pi-config.sh /usr/local/bin/seed-pi-config.sh
+ENV OPENWEBUI_BASE_URL=http://open-webui:8080 \
+    PI_CODING_AGENT_DIR=/home/user/.pi/agent
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/seed-pi-config.sh"]
+USER user
+```
+
+`seed-pi-config.sh` adds `"extensions": ["/opt/pi-openwebui/extension/index.ts"]` to
+`/home/user/.pi/agent/settings.json` (idempotent, preserves other keys) and then execs the
+upstream entrypoint.
+
+Three things bite here:
+
+- **`USER user` matters.** Without it the workspace runs as root, `HOME=/root`, and Pi
+  reads `/root/.pi/agent` — an ephemeral directory, so the seeded settings and any
+  per-user `models.json` are silently ignored.
+- **`PI_CODING_AGENT_DIR` pins Pi's config** to the bind-mounted home regardless of how
+  the container is launched.
+- **Local paths go in `extensions`, not `packages`.** `packages` takes `npm:`/`git:`
+  specs; an absolute path there is ignored without any warning.
+
+The API key is not baked in: Terminals policy env is per *instance*, not per user, so a
+static key there would make every user's agent act as one account. How the per-user key
+reaches the process is a deployment decision (see the note at the top of `config.ts`).
+
 ## Tests
 
 Both scripts run without Pi: they hand the extension a recorder that mimics
