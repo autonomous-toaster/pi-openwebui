@@ -13,7 +13,7 @@ RAG, no skills. This extension closes that gap from the agent side.
 | Tool | Actions | Notes |
 |---|---|---|
 | `owui_notes` | `list`, `search`, `read`, `create`, `append` | Reads are sliced (`offset`/`limit`); append passes the page revision so a concurrent browser edit returns 409 instead of being clobbered |
-| `owui_knowledge` | `list`, `files`, `search`, `read`, `query` | `search` is free SQL `LIKE`; `query` is vector retrieval and costs one embedding call |
+| `owui_knowledge` | `list`, `files`, `search`, `read`, `query`, `create`, `add`, `remove`, `delete` | `search` is free SQL `LIKE`, `query` is vector retrieval and costs one embedding call; `add` indexes workspace files, which costs embeddings for their content |
 | `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Read/write, mirroring the `/api/v1/memories` surface |
 | `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
 | `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
