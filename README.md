@@ -18,6 +18,7 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
 | `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
 | `owui_display` | — | Shows a workspace file in the chat through `/static/shared`, no upload |
+| `owui_chat` | `current`, `rename` | Finds its own conversation by matching `PI_SESSION_ID` against `meta.agent.session_id` |
 
 ## Resources (skills + prompt templates)
 
@@ -67,6 +68,17 @@ Pi arguments or list it in `~/.pi/agent/settings.json`:
 ```json
 { "packages": ["/opt/pi-openwebui"] }
 ```
+
+## Acting on the running conversation
+
+`owui_chat` renames the chat the agent is in, without being told which one. Open WebUI
+stores the Pi session id in every agent message (`meta.agent`, a JWT with a `session_id`
+claim), and Pi exposes the same value as `PI_SESSION_ID`, so the tool lists the user's
+recent chats and matches that claim. Rename is a title-only
+`POST /api/v1/chats/{id}` with `{"chat": {"title": ...}}`.
+
+If the match fails (local Pi session, more than a handful of chats), pass `chat_id`
+explicitly.
 
 ## Running inside an open-terminal workspace
 
