@@ -104,7 +104,7 @@ export class OwuiClient {
 			const detail = errorDetail(body);
 			const hint =
 				response.status === 401
-					? "OPENWEBUI_API_KEY was rejected"
+					? "OPEN_WEBUI_API_KEY was rejected"
 					: response.status === 403
 						? "the API key is not allowed to call this endpoint"
 						: undefined;

@@ -2,7 +2,7 @@
  * Write-path test: creates a throwaway note and memory through the tools, verifies
  * them, then removes both. Requires a live instance and a user API key.
  *
- *   OPENWEBUI_BASE_URL=… OPENWEBUI_API_KEY=… node test/write.ts
+ *   OPEN_WEBUI_BASE_URL=… OPEN_WEBUI_API_KEY=… node test/write.ts
  */
 import piOpenWebUI from "../extension/index.ts";
 import { OwuiClient } from "../extension/client.ts";
@@ -27,7 +27,7 @@ const fakePi = {
 
 const config = loadConfig();
 if (!config.apiKey) {
-	console.error("OPENWEBUI_API_KEY is not set");
+	console.error("OPEN_WEBUI_API_KEY is not set");
 	process.exit(2);
 }
 const client = new OwuiClient(config);

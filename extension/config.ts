@@ -1,7 +1,7 @@
 /**
  * Configuration, read from the environment only.
  *
- * OPENWEBUI_API_KEY is required. There is deliberately no file fallback: how the
+ * OPEN_WEBUI_API_KEY is required. There is deliberately no file fallback: how the
  * key reaches the process is a deployment concern, not the extension's.
  */
 export interface Config {
@@ -30,15 +30,15 @@ function isOn(raw: string | undefined, fallback: boolean): boolean {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	return {
-		baseUrl: (env.OPENWEBUI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ""),
-		apiKey: (env.OPENWEBUI_API_KEY || "").trim(),
-		maxChars: positiveNumber(env.OPENWEBUI_MAX_CHARS, 12000),
-		timeoutMs: positiveNumber(env.OPENWEBUI_TIMEOUT_MS, 60000),
-		resources: isOn(env.OPENWEBUI_RESOURCES, true),
-		resourcesTtlMs: positiveNumber(env.OPENWEBUI_RESOURCES_TTL_MIN, 15) * 60_000,
-		debug: isOn(env.OPENWEBUI_DEBUG, false),
+		baseUrl: (env.OPEN_WEBUI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ""),
+		apiKey: (env.OPEN_WEBUI_API_KEY || "").trim(),
+		maxChars: positiveNumber(env.OPEN_WEBUI_MAX_CHARS, 12000),
+		timeoutMs: positiveNumber(env.OPEN_WEBUI_TIMEOUT_MS, 60000),
+		resources: isOn(env.OPEN_WEBUI_RESOURCES, true),
+		resourcesTtlMs: positiveNumber(env.OPEN_WEBUI_RESOURCES_TTL_MIN, 15) * 60_000,
+		debug: isOn(env.OPEN_WEBUI_DEBUG, false),
 	};
 }
 
 export const CONFIG_HELP =
-	"OPENWEBUI_API_KEY is not set. Create a key in Open WebUI (Settings > Account > API keys) and export it, e.g. OPENWEBUI_API_KEY=sk-… . Optionally set OPENWEBUI_BASE_URL (default http://localhost:3000).";
+	"OPEN_WEBUI_API_KEY is not set. Create a key in Open WebUI (Settings > Account > API keys) and export it, e.g. OPEN_WEBUI_API_KEY=sk-… . Optionally set OPEN_WEBUI_BASE_URL (default http://localhost:3000).";

@@ -32,13 +32,13 @@ file (its SKILL.md files usually have no frontmatter).
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `OPENWEBUI_API_KEY` | — | **Required.** A user API key (`sk-…`) from Settings → Account → API keys |
-| `OPENWEBUI_BASE_URL` | `http://localhost:3000` | Open WebUI base URL |
-| `OPENWEBUI_MAX_CHARS` | `12000` | Max characters per read/query result |
-| `OPENWEBUI_TIMEOUT_MS` | `60000` | Per-request timeout |
-| `OPENWEBUI_RESOURCES` | `on` | Materialize skills/prompts (`off` disables) |
-| `OPENWEBUI_RESOURCES_TTL_MIN` | `15` | Cache lifetime before re-fetching skills |
-| `OPENWEBUI_DEBUG` | `off` | Log discovery details to stderr |
+| `OPEN_WEBUI_API_KEY` | — | **Required.** A user API key (`sk-…`) from Settings → Account → API keys |
+| `OPEN_WEBUI_BASE_URL` | `http://localhost:3000` | Open WebUI base URL |
+| `OPEN_WEBUI_MAX_CHARS` | `12000` | Max characters per read/query result |
+| `OPEN_WEBUI_TIMEOUT_MS` | `60000` | Per-request timeout |
+| `OPEN_WEBUI_RESOURCES` | `on` | Materialize skills/prompts (`off` disables) |
+| `OPEN_WEBUI_RESOURCES_TTL_MIN` | `15` | Cache lifetime before re-fetching skills |
+| `OPEN_WEBUI_DEBUG` | `off` | Log discovery details to stderr |
 
 There is deliberately **no key file fallback**: the extension reads the environment, and
 how the key reaches the process is a deployment concern. Without a key it registers no
@@ -73,7 +73,7 @@ the per-user config on start:
 ```dockerfile
 COPY pi-openwebui /opt/pi-openwebui
 COPY seed-pi-config.sh /usr/local/bin/seed-pi-config.sh
-ENV OPENWEBUI_BASE_URL=http://open-webui:8080 \
+ENV OPEN_WEBUI_BASE_URL=http://open-webui:8080 \
     PI_CODING_AGENT_DIR=/home/user/.pi/agent
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/seed-pi-config.sh"]
 USER user
@@ -103,10 +103,10 @@ Both scripts run without Pi: they hand the extension a recorder that mimics
 `ExtensionAPI` and call each tool's `execute()`.
 
 ```bash
-export OPENWEBUI_BASE_URL=http://192.168.1.18:3000
-export OPENWEBUI_API_KEY=$(cat /tmp/owui_test_key)
+export OPEN_WEBUI_BASE_URL=http://192.168.1.18:3000
+export OPEN_WEBUI_API_KEY=$(cat /tmp/owui_test_key)
 
-node test/smoke.ts    # read paths + resources_discover (set OPENWEBUI_TEST_NOTE / _KB for more)
+node test/smoke.ts    # read paths + resources_discover (set OPEN_WEBUI_TEST_NOTE / _KB for more)
 node test/write.ts    # creates and deletes a throwaway note + memory
 ```
 
@@ -137,8 +137,8 @@ Discovered while building against 0.13.3 — each of these is a real trap:
 - **`cannot reach Open WebUI … Request was cancelled` in a dev shell**: some hosts set
   `HTTP_PROXY`, and Pi's HTTP stack honours it, so LAN traffic gets proxied and stalls.
   Run with `env -u HTTP_PROXY -u HTTPS_PROXY pi …`. Agent workspaces have no proxy.
-- **No tools at all**: `OPENWEBUI_API_KEY` is unset — Pi warns once and registers nothing.
-- **Skills missing**: `OPENWEBUI_DEBUG=on` logs discovery; check `~/.cache/pi-openwebui/skills`
+- **No tools at all**: `OPEN_WEBUI_API_KEY` is unset — Pi warns once and registers nothing.
+- **Skills missing**: `OPEN_WEBUI_DEBUG=on` logs discovery; check `~/.cache/pi-openwebui/skills`
   and remember a name collision keeps the first skill discovered.
 
 ## License

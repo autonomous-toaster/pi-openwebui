@@ -5,11 +5,11 @@
  * on, registerCommand), so we hand it a recorder and call each tool's execute()
  * directly. Point it at a real instance:
  *
- *   OPENWEBUI_BASE_URL=http://192.168.1.18:3000 \
- *   OPENWEBUI_API_KEY=$(cat /tmp/owui_test_key) \
+ *   OPEN_WEBUI_BASE_URL=http://192.168.1.18:3000 \
+ *   OPEN_WEBUI_API_KEY=$(cat /tmp/owui_test_key) \
  *   node test/smoke.ts
  *
- * Optional: OPENWEBUI_TEST_NOTE (note id), OPENWEBUI_TEST_KB (knowledge id).
+ * Optional: OPEN_WEBUI_TEST_NOTE (note id), OPEN_WEBUI_TEST_KB (knowledge id).
  */
 import piOpenWebUI from "../extension/index.ts";
 
@@ -47,7 +47,7 @@ function show(label: string, result: { content: Array<{ text: string }>; isError
 
 async function call(tool: string, params: Record<string, unknown>) {
 	const definition = tools.get(tool);
-	if (!definition) throw new Error(`tool ${tool} not registered (missing OPENWEBUI_API_KEY?)`);
+	if (!definition) throw new Error(`tool ${tool} not registered (missing OPEN_WEBUI_API_KEY?)`);
 	return definition.execute(`test-${Date.now()}`, params);
 }
 
@@ -55,15 +55,15 @@ async function main() {
 	piOpenWebUI(fakePi as never);
 	console.log(`tools registered: ${[...tools.keys()].join(", ") || "none"}`);
 
-	if (!process.env.OPENWEBUI_API_KEY) {
-		console.log("OPENWEBUI_API_KEY not set — skipping live calls");
+	if (!process.env.OPEN_WEBUI_API_KEY) {
+		console.log("OPEN_WEBUI_API_KEY not set — skipping live calls");
 		return;
 	}
 
 	show("notes list", await call("owui_notes", { action: "list" }));
 	show("notes search", await call("owui_notes", { action: "search", query: "impot" }));
 
-	const noteId = process.env.OPENWEBUI_TEST_NOTE;
+	const noteId = process.env.OPEN_WEBUI_TEST_NOTE;
 	if (noteId) {
 		show("notes read (head)", await call("owui_notes", { action: "read", id: noteId, limit: 400 }));
 		show("notes read (offset)", await call("owui_notes", { action: "read", id: noteId, offset: 400, limit: 200 }));
@@ -72,7 +72,7 @@ async function main() {
 	show("knowledge list", await call("owui_knowledge", { action: "list" }));
 	show("knowledge search", await call("owui_knowledge", { action: "search", query: "pajemploi" }));
 
-	const kb = process.env.OPENWEBUI_TEST_KB;
+	const kb = process.env.OPEN_WEBUI_TEST_KB;
 	if (kb) {
 		show("knowledge files", await call("owui_knowledge", { action: "files", kb }));
 		show("knowledge query", await call("owui_knowledge", { action: "query", kb, query: "ACRE taux", k: 2 }));

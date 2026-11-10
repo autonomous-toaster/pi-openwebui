@@ -8,7 +8,7 @@
  * the Agent Skills layout Pi scans.
  *
  * Cache: ~/.cache/pi-openwebui/{skills,prompts}, refreshed atomically when the
- * stamp is older than OPENWEBUI_RESOURCES_TTL_MIN.
+ * stamp is older than OPEN_WEBUI_RESOURCES_TTL_MIN.
  */
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";

@@ -4,9 +4,9 @@
  * Tools: owui_notes, owui_knowledge, owui_memory.
  * Resources: Open WebUI skills and prompt templates appear as Pi skills/prompts.
  *
- * Configuration is environment-only: OPENWEBUI_API_KEY (required),
- * OPENWEBUI_BASE_URL, OPENWEBUI_MAX_CHARS, OPENWEBUI_TIMEOUT_MS,
- * OPENWEBUI_RESOURCES, OPENWEBUI_RESOURCES_TTL_MIN, OPENWEBUI_DEBUG.
+ * Configuration is environment-only: OPEN_WEBUI_API_KEY (required),
+ * OPEN_WEBUI_BASE_URL, OPEN_WEBUI_MAX_CHARS, OPEN_WEBUI_TIMEOUT_MS,
+ * OPEN_WEBUI_RESOURCES, OPEN_WEBUI_RESOURCES_TTL_MIN, OPEN_WEBUI_DEBUG.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { OwuiClient } from "./client.ts";
