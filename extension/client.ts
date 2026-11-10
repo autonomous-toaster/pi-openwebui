@@ -167,4 +167,33 @@ export class OwuiClient {
 	delete<T>(path: string, options?: Omit<RequestOptions, "body">): Promise<T> {
 		return this.request<T>("DELETE", path, options);
 	}
+
+	/** Multipart upload: fetch sets the boundary, so no Content-Type header here. */
+	async postForm<T>(path: string, form: FormData, options?: Omit<RequestOptions, "body">): Promise<T> {
+		const timeoutMs = options?.timeoutMs ?? this.config.timeoutMs;
+		const signals = [AbortSignal.timeout(timeoutMs)];
+		if (options?.signal) signals.push(options.signal);
+
+		let response: Response;
+		try {
+			response = await fetch(`${this.config.baseUrl}${path}`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${this.config.apiKey}` },
+				body: form,
+				signal: AbortSignal.any(signals),
+			});
+		} catch (err) {
+			if (options?.signal?.aborted) throw new OwuiError(0, "cancelled");
+			throw new OwuiError(0, `cannot reach Open WebUI at ${this.config.baseUrl} (${describe(err)})`);
+		}
+
+		const body = await response.text();
+		if (!response.ok) {
+			throw new OwuiError(
+				response.status,
+				[`${response.status} ${response.statusText}`.trim(), errorDetail(body)].filter(Boolean).join(" — "),
+			);
+		}
+		return (body ? (JSON.parse(body) as T) : (undefined as T));
+	}
 }

@@ -1,73 +1,71 @@
 /**
- * owui_display — show a workspace file in the Open WebUI chat, without uploading it.
+ * owui_display — show a workspace file in the Open WebUI chat, authenticated.
  *
- * Open WebUI serves `/static` from a public, unauthenticated directory. Mounting a
- * per-user directory there turns the workspace filesystem into something the chat can
- * render: the file keeps living in the workspace, OWUI only gets a read-only view of one
- * folder. That is why no upload (`POST /api/v1/files/`) is needed.
+ * The file is uploaded to Open WebUI (`POST /api/v1/files/?process=false`) and referenced
+ * by a **relative** URL, `/api/v1/files/<id>/content`. That endpoint requires the user,
+ * and the browser authenticates with its `token` cookie, so the link works for the person
+ * in the chat and for nobody else. Files inherit Open WebUI's own access control; there is
+ * no public directory involved.
  *
- * Files outside that folder are hard-linked into it (same filesystem, no extra bytes),
- * falling back to a copy only when the link cannot cross a filesystem boundary.
- *
- * Requires, on the Open WebUI container:
- *   -v <host>/terminals/<user-id>/shared:/app/backend/open_webui/static/shared:ro
- * and in the agent environment:
- *   OPEN_WEBUI_PUBLIC_URL=http://<host>:3000   (how the *browser* reaches Open WebUI)
+ * Cost of that choice: Open WebUI keeps a copy. The alternative — serving the workspace
+ * directory through `/static` — needs no copy but is world-readable to anyone who can
+ * reach the port, which is why it is not done here.
  */
-import { copyFile, link, mkdir, stat } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import type { OwuiClient } from "../client.ts";
 import { failed, ok } from "./common.ts";
 
 const HOME = "/home/user";
-const SHARE_DIR = join(HOME, "shared");
 
-/** Served by /static, so keep names URL-safe. */
-const SAFE_NAME = /[^A-Za-z0-9._-]+/g;
+const MIME_TYPES: Record<string, string> = {
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+	".avif": "image/avif",
+	".svg": "image/svg+xml",
+	".pdf": "application/pdf",
+	".md": "text/markdown",
+	".txt": "text/plain",
+	".csv": "text/csv",
+	".json": "application/json",
+	".html": "text/html",
+};
 
-/**
- * Addresses only reachable inside the Docker network. A link built on one of these is
- * useless in the browser, so the tool refuses instead of emitting a dead image.
- */
-function isInternalHost(url: string): boolean {
-	try {
-		const { hostname } = new URL(url);
-		if (["localhost", "127.0.0.1", "0.0.0.0", "open-webui", "terminals", "terminals-agent"].includes(hostname.toLowerCase())) {
-			return true;
-		}
-		// Bare container names have no dot.
-		return !hostname.includes(".") && !hostname.includes(":");
-	} catch {
-		return true;
-	}
+const INLINE_IMAGE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".svg"]);
+
+interface UploadedFile {
+	id: string;
+	filename?: string;
+	meta?: { name?: string };
 }
-
-/** Images render inline; everything else becomes a link the chat can open. */
-const INLINE_IMAGE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"]);
 
 interface DisplayParams {
 	path?: unknown;
 	alt?: unknown;
 }
 
-export function registerDisplayTool(pi: ExtensionAPI, options: { publicUrl: string }): void {
+export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient): void {
 	pi.registerTool({
 		name: "owui_display",
 		label: "Show a file in Open WebUI",
 		description:
-			"Show a workspace file in the Open WebUI chat as an inline image or a clickable file, without uploading it.",
-		promptSnippet: "Show a workspace file (image, PDF, text) inline in the Open WebUI chat",
+			"Show a workspace file in the Open WebUI chat as an inline image or a link. The file is attached to the user's Open WebUI files, visible only to them.",
+		promptSnippet: "Show a workspace file (image, PDF, text) in the Open WebUI chat",
 		promptGuidelines: [
 			"Use owui_display after generating an image, chart or report the user should look at; do not paste the same content as text as well.",
-			"owui_display takes an absolute path under /home/user.",
+			"owui_display takes an absolute path under /home/user and returns the markdown to include in your reply.",
 		],
 		parameters: Type.Object({
 			path: Type.String({ description: "Absolute path of the file to show, e.g. /home/user/out/chart.png" }),
 			alt: Type.Optional(Type.String({ description: "Alt text or link label" })),
 		}),
 
-		async execute(_toolCallId, params: DisplayParams) {
+		async execute(_toolCallId, params: DisplayParams, signal) {
 			const action = "display";
 			try {
 				const requested = String(params.path ?? "").trim();
@@ -78,52 +76,33 @@ export function registerDisplayTool(pi: ExtensionAPI, options: { publicUrl: stri
 					return ok(action, `Refusing to display ${requested}: it is outside ${HOME}.`);
 				}
 
-				try {
-					const info = await stat(absolute);
-					if (!info.isFile()) return ok(action, `${requested} is not a file.`);
-				} catch {
-					return ok(action, `${requested} does not exist.`);
-				}
+				const info = await stat(absolute).catch(() => undefined);
+				if (!info?.isFile()) return ok(action, `${requested} is not a file.`);
 
-				await mkdir(SHARE_DIR, { recursive: true });
 				const extension = extname(absolute).toLowerCase();
-				const raw = basename(absolute);
-				const safe = raw.replace(SAFE_NAME, "-");
-				const target = join(SHARE_DIR, safe);
+				const name = basename(absolute);
+				const bytes = await readFile(absolute);
+				const type = MIME_TYPES[extension] ?? "application/octet-stream";
 
-				if (resolve(target) !== absolute) {
-					try {
-						await link(absolute, target);
-					} catch (err) {
-						const code = (err as NodeJS.ErrnoException).code;
-						if (code === "EEXIST") {
-							// Already shared under this name.
-						} else {
-							await copyFile(absolute, target);
-						}
-					}
-				}
+				const form = new FormData();
+				form.append("file", new Blob([bytes], { type }), name);
 
-				const base = options.publicUrl.replace(/\/+$/, "");
-				if (isInternalHost(base)) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Cannot build a browser-reachable link: OPEN_WEBUI_PUBLIC_URL is "${base}", which only resolves inside the workspace network. Ask the user for the address they use for Open WebUI, or have them set OPEN_WEBUI_PUBLIC_URL (for example http://<host>:3000) in the agent environment, then retry.`,
-							},
-						],
-						details: { action, ok: false, error: "public url is internal" },
-						isError: true,
-					};
-				}
-				const url = `${base}/static/shared/${encodeURIComponent(safe)}`;
-				const label = String(params.alt ?? raw);
+				const uploaded = await client.postForm<UploadedFile>(
+					"/api/v1/files/",
+					form,
+					{ query: { process: false }, signal, timeoutMs: 120_000 },
+				);
+				if (!uploaded?.id) return ok(action, `Open WebUI did not return a file id for ${requested}.`);
+
+				// Relative on purpose: the browser sends its session cookie, so the link is
+				// authenticated and independent of how the user reaches Open WebUI.
+				const url = `/api/v1/files/${uploaded.id}/content`;
+				const label = String(params.alt ?? name);
 				const markdown = INLINE_IMAGE.has(extension) ? `![${label}](${url})` : `[${label}](${url})`;
 
 				return ok(
 					action,
-					`Shown in the chat as ${url}\n\nInclude this markdown in your reply:\n${markdown}`,
+					`Attached as Open WebUI file ${uploaded.id} (${Math.round(bytes.length / 1024)} KB).\n\nInclude this markdown in your reply:\n${markdown}`,
 				);
 			} catch (err) {
 				return failed(action, err);

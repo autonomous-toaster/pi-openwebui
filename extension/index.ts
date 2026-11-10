@@ -41,7 +41,7 @@ export default function piOpenWebUI(pi: ExtensionAPI) {
 	registerMemoryTool(pi, client, config);
 	registerWebTool(pi, client, config);
 	registerAskTool(pi);
-	registerDisplayTool(pi, { publicUrl: config.publicUrl });
+	registerDisplayTool(pi, client);
 	registerChatTool(pi, client);
 
 	pi.on("resources_discover", async (_event, ctx) => {

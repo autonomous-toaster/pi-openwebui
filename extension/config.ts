@@ -6,8 +6,6 @@
  */
 export interface Config {
 	baseUrl: string;
-	/** How the *browser* reaches Open WebUI, for links handed back to the chat. */
-	publicUrl: string;
 	apiKey: string;
 	/** Maximum characters returned by a single read/query call. */
 	maxChars: number;
@@ -33,7 +31,6 @@ function isOn(raw: string | undefined, fallback: boolean): boolean {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	return {
 		baseUrl: (env.OPEN_WEBUI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ""),
-		publicUrl: (env.OPEN_WEBUI_PUBLIC_URL || env.OPEN_WEBUI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ""),
 		apiKey: (env.OPEN_WEBUI_API_KEY || "").trim(),
 		maxChars: positiveNumber(env.OPEN_WEBUI_MAX_CHARS, 12000),
 		timeoutMs: positiveNumber(env.OPEN_WEBUI_TIMEOUT_MS, 60000),
