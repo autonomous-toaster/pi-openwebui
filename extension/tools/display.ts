@@ -20,6 +20,7 @@ const HOME = "/home/user";
 
 interface DisplayParams {
 	path?: unknown;
+	page?: unknown;
 }
 
 export function registerDisplayTool(pi: ExtensionAPI): void {
