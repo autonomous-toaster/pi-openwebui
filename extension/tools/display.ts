@@ -1,16 +1,16 @@
 /**
- * owui_display — show a workspace file in the Open WebUI chat, authenticated.
+ * owui_display — show a workspace file in the Open WebUI chat, without uploading it.
  *
- * The file is uploaded to Open WebUI (`POST /api/v1/files/?process=false`) and referenced
- * by a **relative** URL, `/api/v1/files/<id>/content`. That endpoint requires the user,
- * and the browser authenticates with its `token` cookie, so the link works for the person
- * in the chat and for nobody else. Files inherit Open WebUI's own access control; there is
- * no public directory involved.
+ * Three options were considered:
+ *   1. mount a folder under Open WebUI's `/static` — no copy, but world-readable;
+ *   2. upload to `/api/v1/files/` — authenticated, but leaves copies with no cleanup;
+ *   3. this: a short-lived signed URL served by `proxy/`, which needs no copy and no
+ *      public directory. The signature covers the exact path and expires.
  *
- * Cost of that choice: Open WebUI keeps a copy. The alternative — serving the workspace
- * directory through `/static` — needs no copy but is world-readable to anyone who can
- * reach the port, which is why it is not done here.
+ * Uploads are still used as a fallback when no proxy is configured, so the tool never
+ * silently does nothing.
  */
+import { createHmac } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -49,7 +49,13 @@ interface DisplayParams {
 	alt?: unknown;
 }
 
-export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient): void {
+export interface DisplayOptions {
+	proxyUrl: string;
+	proxySecret: string;
+	proxyTtlSeconds?: number;
+}
+
+export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient, options: DisplayOptions): void {
 	pi.registerTool({
 		name: "owui_display",
 		label: "Show a file in Open WebUI",
@@ -83,6 +89,20 @@ export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient): void 
 				const name = basename(absolute);
 				const bytes = await readFile(absolute);
 				const type = MIME_TYPES[extension] ?? "application/octet-stream";
+
+				if (options.proxyUrl && options.proxySecret) {
+					const expiry = Math.floor(Date.now() / 1000) + (options.proxyTtlSeconds ?? 3600);
+					const signature = createHmac("sha256", options.proxySecret)
+						.update(`${absolute}\n${expiry}`)
+						.digest("hex");
+					const url = `${options.proxyUrl}/f?p=${encodeURIComponent(absolute)}&e=${expiry}&s=${signature}`;
+					const label = String(params.alt ?? name);
+					const markdown = INLINE_IMAGE.has(extension) ? `![${label}](${url})` : `[${label}](${url})`;
+					return ok(
+						action,
+						`Served through the signed file proxy, valid for ${Math.round((options.proxyTtlSeconds ?? 3600) / 60)} min.\n\nInclude this markdown in your reply:\n${markdown}`,
+					);
+				}
 
 				const form = new FormData();
 				form.append("file", new Blob([bytes], { type }), name);
