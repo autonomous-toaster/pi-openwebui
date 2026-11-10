@@ -26,6 +26,23 @@ const SHARE_DIR = join(HOME, "shared");
 /** Served by /static, so keep names URL-safe. */
 const SAFE_NAME = /[^A-Za-z0-9._-]+/g;
 
+/**
+ * Addresses only reachable inside the Docker network. A link built on one of these is
+ * useless in the browser, so the tool refuses instead of emitting a dead image.
+ */
+function isInternalHost(url: string): boolean {
+	try {
+		const { hostname } = new URL(url);
+		if (["localhost", "127.0.0.1", "0.0.0.0", "open-webui", "terminals", "terminals-agent"].includes(hostname.toLowerCase())) {
+			return true;
+		}
+		// Bare container names have no dot.
+		return !hostname.includes(".") && !hostname.includes(":");
+	} catch {
+		return true;
+	}
+}
+
 /** Images render inline; everything else becomes a link the chat can open. */
 const INLINE_IMAGE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"]);
 
@@ -88,6 +105,18 @@ export function registerDisplayTool(pi: ExtensionAPI, options: { publicUrl: stri
 				}
 
 				const base = options.publicUrl.replace(/\/+$/, "");
+				if (isInternalHost(base)) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Cannot build a browser-reachable link: OPEN_WEBUI_PUBLIC_URL is "${base}", which only resolves inside the workspace network. Ask the user for the address they use for Open WebUI, or have them set OPEN_WEBUI_PUBLIC_URL (for example http://<host>:3000) in the agent environment, then retry.`,
+							},
+						],
+						details: { action, ok: false, error: "public url is internal" },
+						isError: true,
+					};
+				}
 				const url = `${base}/static/shared/${encodeURIComponent(safe)}`;
 				const label = String(params.alt ?? raw);
 				const markdown = INLINE_IMAGE.has(extension) ? `![${label}](${url})` : `[${label}](${url})`;
