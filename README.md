@@ -16,6 +16,7 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_knowledge` | `list`, `files`, `search`, `read`, `query` | `search` is free SQL `LIKE`; `query` is vector retrieval and costs one embedding call |
 | `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Read/write, mirroring the `/api/v1/memories` surface |
 | `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
+| `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
 
 ## Resources (skills + prompt templates)
 
@@ -141,9 +142,15 @@ Discovered while building against 0.13.3 — each of these is a real trap:
   `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL` off it embeds the loaded pages into a
   `web-search-<user>-<hash>` collection (one embedding call per distinct query).
   `/api/v1/retrieval/process/url?process=false` extracts a single page with no side effect.
-- **Some builtins cannot be bridged**: `ask_user` needs `__event_call__` (browser event
-  channel) and `display_file` needs the chat's rendered state, so neither is reachable
-  from a terminal agent.
+- **`ask_user` is reachable after all, from the Pi side.** Pi's dialogs are a
+  request/response sub-protocol (`extension_ui_request` / `extension_ui_response`), and
+  Open WebUI's Pi transport (`utils/agents/pi.py`) already maps `select`, `input`,
+  `confirm` and `editor` onto its `ask_user` UI. So `owui_ask` needs no Open WebUI
+  change — but a *custom Open WebUI tool* could not do it: those run in Open WebUI's chat
+  pipeline and are never callable from the terminal agent.
+- **`display_file` stays out of reach**: Pi has no "show this file" UI method, and Open
+  WebUI resolves terminal files against the rendered chat. Uploading the file with
+  `/api/v1/files/` and returning a link is the workable substitute, if ever needed.
 
 ## Troubleshooting
 
