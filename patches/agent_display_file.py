@@ -1,0 +1,79 @@
+"""Teach Open WebUI's agent output to emit the terminal file-preview event.
+
+Open WebUI opens a file in its side panel when the backend emits
+
+    {"type": "terminal:display_file", "data": {"path": ...}}
+
+That emission exists only for the chat tool-server path (`utils/middleware.py`), so an
+agent tool named `display_file` shows a card instead of opening the panel. This patch adds
+the same emission to `Output.tool()` — the single choke point for agent tool results — so
+every agent provider (Pi, Codex, Claude Code, ACP) behaves like a terminal tool.
+
+Idempotent: re-running on a patched file changes nothing.
+
+Usage: python3 agent_display_file.py /app/backend/open_webui/utils/agents/output.py
+"""
+
+import pathlib
+import sys
+
+MARKER = "agent display_file -> emitting terminal:display_file"
+
+ANCHOR = """        await self.flush(force=True)
+
+    async def approve("""
+
+PATCH = """        await self.flush(force=True)
+
+        # Agent tool calls must open the file panel just like terminal tool calls do.
+        if done and name == "display_file":
+            payload = result
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = None
+            path = payload.get("path") if isinstance(payload, dict) else None
+            page = payload.get("page") if isinstance(payload, dict) else None
+            if path and self.emitter:
+                log.info("agent display_file -> emitting terminal:display_file for %s", path)
+                await self.emitter(
+                    {
+                        "type": "terminal:display_file",
+                        "data": {"path": path, **({"page": page} if page else {})},
+                    }
+                )
+
+    async def approve("""
+
+LOGGER_IMPORT = ('from open_webui.utils.tool_permissions import requires_tool_approval\n',
+                 'from open_webui.utils.tool_permissions import requires_tool_approval\n\nlog = logging.getLogger(__name__)\n')
+LOGGING_IMPORT = ("import json\n", "import json\nimport logging\n")
+
+
+def main(path: str) -> int:
+    file = pathlib.Path(path)
+    source = file.read_text()
+
+    if MARKER in source:
+        print("already patched")
+        return 0
+    if ANCHOR not in source:
+        print("anchor not found: agent Output.tool() has changed upstream", file=sys.stderr)
+        return 1
+
+    if "import logging" not in source:
+        source = source.replace(*LOGGING_IMPORT, 1)
+    if "log = logging.getLogger(__name__)" not in source:
+        source = source.replace(*LOGGER_IMPORT, 1)
+
+    file.write_text(source.replace(ANCHOR, PATCH, 1))
+    print(f"patched {file}")
+    return 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print(__doc__, file=sys.stderr)
+        sys.exit(2)
+    sys.exit(main(sys.argv[1]))
