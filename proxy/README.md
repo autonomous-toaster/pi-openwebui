@@ -17,7 +17,12 @@ Then in the agent environment:
 ```sh
 OPEN_WEBUI_FILE_PROXY_URL=http://<host>:3001
 OPEN_WEBUI_FILE_PROXY_SECRET=<the same PROXY_SECRET>
+OPEN_WEBUI_FILE_PROXY_ROOT=/homes/terminals/<user-id>   # how the proxy sees this home
 ```
+
+The last one matters because the workspace mounts the home at `/home/user` while the
+proxy mounts the same volume at `/homes`: the agent signs the path the *proxy* will open,
+not the one it sees itself.
 
 ## Why a signature and not a cookie
 

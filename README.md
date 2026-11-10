@@ -166,9 +166,11 @@ Discovered while building against 0.13.3 — each of these is a real trap:
   `/api/v1/files/` (authenticated but leaves copies with no cleanup), and a short-lived
   signed URL. `owui_display` uses the third: `proxy/` serves exactly the paths the agent
   signed, inside the mounted homes root, and the link expires (1 h by default). Set
-  `OPEN_WEBUI_FILE_PROXY_URL` and `OPEN_WEBUI_FILE_PROXY_SECRET`; without them the tool
-  falls back to an Open WebUI upload so it never silently does nothing. See
-  `proxy/README.md` for why a cookie cannot be used across origins.
+  `OPEN_WEBUI_FILE_PROXY_URL`, `OPEN_WEBUI_FILE_PROXY_SECRET` and
+  `OPEN_WEBUI_FILE_PROXY_ROOT` (how the proxy sees this home, e.g.
+  `/homes/terminals/<user-id>`); without them the tool falls back to an Open WebUI upload
+  so it never silently does nothing. See `proxy/README.md` for why a cookie cannot be used
+  across origins.
 
 ## Acting on the running conversation
 

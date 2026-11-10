@@ -52,6 +52,8 @@ interface DisplayParams {
 export interface DisplayOptions {
 	proxyUrl: string;
 	proxySecret: string;
+	/** Proxy-side path of this workspace's home; the container path is rewritten onto it. */
+	proxyRoot: string;
 	proxyTtlSeconds?: number;
 }
 
@@ -91,11 +93,25 @@ export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient, option
 				const type = MIME_TYPES[extension] ?? "application/octet-stream";
 
 				if (options.proxyUrl && options.proxySecret) {
+					// The proxy resolves paths in its own layout, so sign what it will open.
+					if (!options.proxyRoot) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: "OPEN_WEBUI_FILE_PROXY_ROOT is not set, so the proxy cannot map /home/user to its own filesystem. Set it to how the proxy sees this home (for example /homes/terminals/<user-id>).",
+								},
+							],
+							details: { action, ok: false, error: "proxy root missing" },
+							isError: true,
+						};
+					}
+					const proxyPath = `${options.proxyRoot}${absolute.slice(HOME.length)}`;
 					const expiry = Math.floor(Date.now() / 1000) + (options.proxyTtlSeconds ?? 3600);
 					const signature = createHmac("sha256", options.proxySecret)
-						.update(`${absolute}\n${expiry}`)
+						.update(`${proxyPath}\n${expiry}`)
 						.digest("hex");
-					const url = `${options.proxyUrl}/f?p=${encodeURIComponent(absolute)}&e=${expiry}&s=${signature}`;
+					const url = `${options.proxyUrl}/f?p=${encodeURIComponent(proxyPath)}&e=${expiry}&s=${signature}`;
 					const label = String(params.alt ?? name);
 					const markdown = INLINE_IMAGE.has(extension) ? `![${label}](${url})` : `[${label}](${url})`;
 					return ok(
