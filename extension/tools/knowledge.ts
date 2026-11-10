@@ -275,10 +275,13 @@ export function registerKnowledgeTool(pi: ExtensionAPI, client: OwuiClient, conf
 						}
 						const form = new FormData();
 						form.append("file", new Blob([bytes]), basename(absolute));
+						// Processing must finish before the file can be indexed: the batch
+						// endpoint embeds whatever text is already extracted, and returns 200
+						// with an empty file list when there is none.
 						const uploaded = await client.postForm<{ id?: string }>(
 							"/api/v1/files/",
 							form,
-							{ query: { process: false }, signal, timeoutMs: 120_000 },
+							{ query: { process: true, process_in_background: false }, signal, timeoutMs: 180_000 },
 						);
 						if (uploaded?.id) fileIds.push(uploaded.id);
 						else skipped.push(`${rawPath} (upload failed)`);
@@ -287,17 +290,38 @@ export function registerKnowledgeTool(pi: ExtensionAPI, client: OwuiClient, conf
 						return ok(action, `Nothing indexed.${skipped.length ? `\nSkipped: ${skipped.join(", ")}` : ""}`);
 					}
 
-					await client.post(
+					const added = await client.post<{ files?: unknown[] }>(
 						`/api/v1/knowledge/${params.kb}/files/batch/add`,
 						fileIds.map((fileId) => ({ file_id: fileId })),
-						{ signal, timeoutMs: 300_000 },
+						{ signal, timeoutMs: 600_000 },
 					);
+
+					// The endpoint answers 200 even when nothing was indexed, so confirm by
+					// re-listing instead of trusting the request.
+					const after = fileList(
+						await client.get<KnowledgeFile[] | FilePage>(`/api/v1/knowledge/${params.kb}/files`, {
+							signal,
+						}),
+					);
+					const indexed = Array.isArray(added?.files) ? added.files.length : 0;
+
+					if (!indexed) {
+						return ok(
+							action,
+							[
+								`Open WebUI accepted the files but indexed none of them into ${params.kb}.`,
+								"This is what happens when a file has no extractable text (scanned PDF, images). Open WebUI's extraction engine handles plain text and text-layer PDFs; scanned documents need tika or docling selected in Admin → Documents.",
+								skipped.length ? `Skipped: ${skipped.join(", ")}` : "",
+							]
+								.filter(Boolean)
+								.join("\n"),
+						);
+					}
 
 					return ok(
 						action,
 						[
-							`Added ${fileIds.length} file(s) to knowledge base ${params.kb}: ${fileIds.map((id) => id.slice(0, 8)).join(", ")}`,
-							"Open WebUI indexes them in the background; they are searchable once embedding finishes.",
+							`Indexed ${indexed} file(s) into ${params.kb} (base now holds ${after.length} files).`,
 							skipped.length ? `Skipped: ${skipped.join(", ")}` : "",
 						]
 							.filter(Boolean)

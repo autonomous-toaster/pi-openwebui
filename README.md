@@ -144,6 +144,10 @@ Discovered while building against 0.13.3 — each of these is a real trap:
 - **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
   editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
   markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
+- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
+  whatever text the upload already extracted, so a file uploaded with `process=false`, or
+  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
+  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
 - **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
   normalise.
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
@@ -246,6 +250,10 @@ Discovered while building against 0.13.3 — each of these is a real trap:
 - **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
   editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
   markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
+- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
+  whatever text the upload already extracted, so a file uploaded with `process=false`, or
+  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
+  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
 - **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
   normalise.
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
@@ -346,6 +354,10 @@ Discovered while building against 0.13.3 — each of these is a real trap:
 - **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
   editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
   markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
+- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
+  whatever text the upload already extracted, so a file uploaded with `process=false`, or
+  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
+  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
 - **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
   normalise.
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
@@ -438,6 +450,10 @@ Discovered while building against 0.13.3 — each of these is a real trap:
 - **Notes** carry `data.pages[]`, each with `content.{md,html,json}` and a `revision`; the
   editor falls back to `marked.parse(content.md)` when html/json are absent, so writing
   markdown only is a valid state. `NoteForm` rejects `data.pages` on create.
+- **`/knowledge/{id}/files/batch/add` answers 200 when it indexed nothing.** It embeds
+  whatever text the upload already extracted, so a file uploaded with `process=false`, or
+  any file with no text layer (scanned PDF), yields an empty result and no error. The tool
+  uploads with `process=true&process_in_background=false` and then verifies by re-listing.
 - **Epoch units vary** (seconds, ms, ns) across resources — `updated_at` handling must
   normalise.
 - **Frontmatter descriptions need quoting**: an unquoted YAML scalar with a colon makes Pi
