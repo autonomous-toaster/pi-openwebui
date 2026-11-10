@@ -128,15 +128,18 @@ export function registerSkillTool(pi: ExtensionAPI, client: OwuiClient): void {
 					const description = String(params.description ?? "").trim();
 					if (!description) return ok(action, "Provide `description`: it decides when the skill is used.");
 
+					// Open WebUI rejects a file list without SKILL.md at the root, so add it
+					// from `content` when the caller only supplied supporting files.
+					const body = String(params.content ?? "");
+					const ops = fileOps(params.files);
+					const files = ops.length
+						? [...(ops.some((op) => op.path === "SKILL.md") ? [] : [{ path: "SKILL.md", content: body }]),
+							...ops.map(({ path, content }) => ({ path, content }))]
+						: undefined;
+
 					await client.post(
 						"/api/v1/skills/create",
-						{
-							id,
-							name,
-							description,
-							content: String(params.content ?? ""),
-							...(fileOps(params.files).length ? { files: fileOps(params.files).map(({ path, content }) => ({ path, content })) } : {}),
-						},
+						{ id, name, description, content: body, ...(files ? { files } : {}) },
 						{ signal },
 					);
 					return ok(action, `Created skill ${id}. It appears in Pi after the next /reload or session start.`);
@@ -146,12 +149,20 @@ export function registerSkillTool(pi: ExtensionAPI, client: OwuiClient): void {
 					const id = String(params.id ?? "").trim();
 					if (!id) return ok(action, "Provide `id` to update.");
 					const ops = fileOps(params.files);
+
+					// File operations are optimistic: Open WebUI wants the version being edited.
+					let expected: string | undefined;
+					if (ops.length) {
+						const current = await client.get<SkillDetail>(`/api/v1/skills/id/${id}`, { signal });
+						expected = current.version_id;
+						if (!expected) return ok(action, `Cannot read the current version of ${id}; retry or update without files.`);
+					}
 					const body: Record<string, unknown> = {
 						id,
 						name: String(params.name ?? id),
 						...(String(params.description ?? "").trim() ? { description: String(params.description).trim() } : {}),
 						...(typeof params.content === "string" ? { content: params.content } : {}),
-						...(ops.length ? { operations: ops } : {}),
+						...(ops.length ? { operations: ops, expected_version_id: expected } : {}),
 						...(String(params.commit_message ?? "").trim()
 							? { commit_message: String(params.commit_message).trim() }
 							: {}),
