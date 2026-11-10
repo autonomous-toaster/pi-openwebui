@@ -10,6 +10,8 @@ export interface Config {
 	/** Maximum characters returned by a single read/query call. */
 	maxChars: number;
 	timeoutMs: number;
+	/** Register Open WebUI's MCP servers with Pi for this session. */
+	mcp: boolean;
 	/** Materialize Open WebUI skills/prompts into Pi resource paths. */
 	resources: boolean;
 	resourcesTtlMs: number;
@@ -34,6 +36,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		apiKey: (env.OPEN_WEBUI_API_KEY || "").trim(),
 		maxChars: positiveNumber(env.OPEN_WEBUI_MAX_CHARS, 12000),
 		timeoutMs: positiveNumber(env.OPEN_WEBUI_TIMEOUT_MS, 60000),
+		mcp: isOn(env.OPEN_WEBUI_MCP, true),
 		resources: isOn(env.OPEN_WEBUI_RESOURCES, true),
 		resourcesTtlMs: positiveNumber(env.OPEN_WEBUI_RESOURCES_TTL_MIN, 15) * 60_000,
 		debug: isOn(env.OPEN_WEBUI_DEBUG, false),

@@ -22,6 +22,21 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_skill` | `list`, `read`, `create`, `update` | Publishes procedures back into Open WebUI's skill library |
 | `owui_chat` | `current`, `rename` | Finds its own conversation by matching `PI_SESSION_ID` against `meta.agent.session_id` |
 
+## MCP servers from Open WebUI
+
+Open WebUI keeps MCP servers in its tool-server configuration. The extension reads
+`GET /api/v1/configs/tool_servers`, keeps the `type: "mcp"` entries that are enabled, and
+registers them with Pi **while loading**, so they connect with any `mcp.json` servers at
+session start. One definition then serves both sides, and nothing is written to disk.
+
+Servers registered this way get `codemode` exposure: their tools stay out of the prompt and
+scripts reach them through `searchTools()`/`describeTool()`. Set `OPEN_WEBUI_MCP=off` to
+skip the bridge, and name any server in `mcp.json` to override a registration.
+
+**Limitation**: OAuth-backed servers keep their token inside Open WebUI's OAuth client
+manager, so they are skipped — Pi has to authenticate those itself (`pi mcp add`). Run
+`/openwebui` to see what was registered and what was skipped.
+
 ## Resources (skills + prompt templates)
 
 On startup the extension materializes Open WebUI skills into `~/.cache/pi-openwebui/skills/`
@@ -42,6 +57,7 @@ file (its SKILL.md files usually have no frontmatter).
 | `OPEN_WEBUI_BASE_URL` | `http://localhost:3000` | Open WebUI base URL |
 | `OPEN_WEBUI_MAX_CHARS` | `12000` | Max characters per read/query result |
 | `OPEN_WEBUI_TIMEOUT_MS` | `60000` | Per-request timeout |
+| `OPEN_WEBUI_MCP` | `on` | Register Open WebUI's MCP servers with Pi |
 | `OPEN_WEBUI_RESOURCES` | `on` | Materialize skills/prompts (`off` disables) |
 | `OPEN_WEBUI_RESOURCES_TTL_MIN` | `15` | Cache lifetime before re-fetching skills |
 | `OPEN_WEBUI_DEBUG` | `off` | Log discovery details to stderr |

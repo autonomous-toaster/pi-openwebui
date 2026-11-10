@@ -14,6 +14,7 @@ import { CONFIG_HELP, loadConfig } from "./config.ts";
 import { discoverResources } from "./resources.ts";
 import { registerAskTool } from "./tools/ask.ts";
 import { registerChatTool } from "./tools/chat.ts";
+import { syncMcpServers } from "./mcp.ts";
 import { registerDisplayTool } from "./tools/display.ts";
 import { registerSkillTool } from "./tools/skill.ts";
 import { registerTasksTool } from "./tools/tasks.ts";
@@ -22,7 +23,7 @@ import { registerMemoryTool } from "./tools/memory.ts";
 import { registerNotesTool } from "./tools/notes.ts";
 import { registerWebTool } from "./tools/web.ts";
 
-export default function piOpenWebUI(pi: ExtensionAPI) {
+export default async function piOpenWebUI(pi: ExtensionAPI) {
 	const config = loadConfig();
 
 	if (!config.apiKey) {
@@ -33,6 +34,9 @@ export default function piOpenWebUI(pi: ExtensionAPI) {
 	}
 
 	const client = new OwuiClient(config);
+
+	// Registered while loading, so Pi connects them together with any `mcp.json` servers.
+	const mcp = await syncMcpServers(pi, client, config);
 	const log = (message: string, level: "info" | "warning" = "info") => {
 		if (config.debug) console.error(`[pi-openwebui] ${message}`);
 		void level;
@@ -72,6 +76,11 @@ export default function piOpenWebUI(pi: ExtensionAPI) {
 				);
 				lines.push(
 				`tools: owui_notes, owui_knowledge, owui_memory, owui_web, owui_ask, owui_chat, display_file, set_tasks, owui_skill · resources: ${config.resources ? "on" : "off"}`,
+			);
+			lines.push(
+				mcp.registered.length
+					? `mcp from Open WebUI: ${mcp.registered.join(", ")}${mcp.skipped.length ? ` · skipped: ${mcp.skipped.join(", ")}` : ""}`
+					: `mcp from Open WebUI: none${mcp.skipped.length ? ` (skipped: ${mcp.skipped.join(", ")})` : ""}`,
 			);
 			} catch (err) {
 				lines.push(`not connected: ${err instanceof Error ? err.message : String(err)}`);
