@@ -1,7 +1,7 @@
 /**
  * pi-openwebui — expose Open WebUI to the Pi coding agent.
  *
- * Tools: owui_notes, owui_knowledge, owui_memory, owui_web.
+ * Tools: owui_notes, owui_knowledge, owui_memory, owui_web, owui_ask.
  * Resources: Open WebUI skills and prompt templates appear as Pi skills/prompts.
  *
  * Configuration is environment-only: OPEN_WEBUI_API_KEY (required),
@@ -12,6 +12,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { OwuiClient } from "./client.ts";
 import { CONFIG_HELP, loadConfig } from "./config.ts";
 import { discoverResources } from "./resources.ts";
+import { registerAskTool } from "./tools/ask.ts";
 import { registerKnowledgeTool } from "./tools/knowledge.ts";
 import { registerMemoryTool } from "./tools/memory.ts";
 import { registerNotesTool } from "./tools/notes.ts";
@@ -37,6 +38,7 @@ export default function piOpenWebUI(pi: ExtensionAPI) {
 	registerKnowledgeTool(pi, client, config);
 	registerMemoryTool(pi, client, config);
 	registerWebTool(pi, client, config);
+	registerAskTool(pi);
 
 	pi.on("resources_discover", async (_event, ctx) => {
 		const resources = await discoverResources(client, config, (message, level = "info") => {
@@ -61,7 +63,7 @@ export default function piOpenWebUI(pi: ExtensionAPI) {
 					`connected · ${count(notes)} notes · ${count(bases)} knowledge bases · ${count(skills)} skills`,
 				);
 				lines.push(
-				`tools: owui_notes, owui_knowledge, owui_memory, owui_web · resources: ${config.resources ? "on" : "off"}`,
+				`tools: owui_notes, owui_knowledge, owui_memory, owui_web, owui_ask · resources: ${config.resources ? "on" : "off"}`,
 			);
 			} catch (err) {
 				lines.push(`not connected: ${err instanceof Error ? err.message : String(err)}`);
