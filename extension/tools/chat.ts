@@ -91,15 +91,14 @@ export function registerChatTool(pi: ExtensionAPI, client: OwuiClient): void {
 			chat_id: Type.Optional(Type.String({ description: "Explicit chat id if auto-detection fails" })),
 		}),
 
-		async execute(_toolCallId, params: ChatParams, signal) {
+		async execute(_toolCallId, params: ChatParams, signal, _onUpdate, ctx) {
 			const action = String(params.action ?? "");
 			try {
-				const sessionId = process.env.PI_SESSION_ID ?? "";
+				// PI_SESSION_ID is injected into bash commands, not into this process, so
+				// read it from the session manager instead.
+				const sessionId = ctx?.sessionManager?.getSessionId?.() ?? "";
 				if (!sessionId && !params.chat_id) {
-					return ok(
-						action,
-						"PI_SESSION_ID is not set, so the conversation cannot be identified. Pass `chat_id` explicitly.",
-					);
+					return ok(action, "No Pi session id is available, so the conversation cannot be identified. Pass `chat_id` explicitly.");
 				}
 
 				const chatId = await resolveChat(
