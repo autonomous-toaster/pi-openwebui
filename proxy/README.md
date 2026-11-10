@@ -1,42 +1,39 @@
 # owui-file-proxy
 
-Serves workspace files to the browser for Open WebUI chats, without uploading them and
-without a public directory.
+Serves workspace files to the browser for Open WebUI chats: no upload, no public
+directory, and no token in the URL — the browser's Open WebUI session decides who may read
+what.
 
 ```sh
 docker run -d --name owui-file-proxy --network openwebui --restart unless-stopped \
-  -e PROXY_SECRET="$(openssl rand -hex 32)" \
-  -e HOMES_ROOT=/homes \
+  -e OWUI_URL=http://open-webui:8080 \
+  -e HOMES_ROOT=/homes -e HOMES_PREFIX=terminals \
   -v terminals-data:/homes:ro \
   -p 3001:8080 \
   owui-file-proxy:latest
 ```
 
-Then in the agent environment:
+Agent environment: `OPEN_WEBUI_FILE_PROXY_URL=http://<host>:3001`.
 
-```sh
-OPEN_WEBUI_FILE_PROXY_URL=http://<host>:3001
-OPEN_WEBUI_FILE_PROXY_SECRET=<the same PROXY_SECRET>
-OPEN_WEBUI_FILE_PROXY_ROOT=/homes/terminals/<user-id>   # how the proxy sees this home
-```
+## Why the cookie works across ports
 
-The last one matters because the workspace mounts the home at `/home/user` while the
-proxy mounts the same volume at `/homes`: the agent signs the path the *proxy* will open,
-not the one it sees itself.
+Open WebUI sets `token` as a host-scoped cookie (`Secure=false`, `SameSite=Lax`, no
+`Domain`, no port). Cookies ignore ports, and "same-site" is scheme + registrable domain,
+so a page served from `http://host:3000` sends that cookie to `http://host:3001` on an
+`<img>` request. The proxy then asks Open WebUI who the token belongs to
+(`GET /api/v1/auths/`) and serves **only** files under that user's own workspace home.
 
-## Why a signature and not a cookie
+Consequences worth knowing:
 
-Open WebUI authenticates browsers with a `token` cookie scoped to its own origin. An
-`<img>` in the chat points at this proxy, which is a different origin, so the cookie is not
-sent. The agent therefore mints a link:
+- An incognito window has no cookie and gets **401**.
+- The URL alone is worthless; there is nothing to leak in a chat log or a screenshot.
+- The link only works when the browser reaches the proxy on the **same host** it uses for
+  Open WebUI. Different hostnames mean a different cookie jar.
+- Behind HTTPS the cookie is still `Secure=false` here, so an `http://` proxy keeps
+  working; if you later force `WEBUI_AUTH_COOKIE_SECURE`, the proxy needs TLS too.
 
-```
-/f?p=<absolute path>&e=<expiry>&s=HMAC-SHA256(secret, "path\nexpiry")
-```
+## Endpoint
 
-Properties: unguessable, expiring (default 1 h), bound to one exact path, read-only, and
-confined to `HOMES_ROOT` after resolution. No listing, no traversal, no unsigned read.
-
-## Endpoints
-
-`GET /f?p=&e=&s=` — the only route. Returns the file inline, or `400`/`403`/`404`/`410`.
+`GET /f?p=/home/user/<path>` — the only route. `400` if the path is outside `/home/user`,
+`401` without a valid session, `403` if the resolved file escapes the caller's home,
+`404` if it is missing.

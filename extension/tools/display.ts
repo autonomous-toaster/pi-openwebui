@@ -4,13 +4,13 @@
  * Three options were considered:
  *   1. mount a folder under Open WebUI's `/static` — no copy, but world-readable;
  *   2. upload to `/api/v1/files/` — authenticated, but leaves copies with no cleanup;
- *   3. this: a short-lived signed URL served by `proxy/`, which needs no copy and no
- *      public directory. The signature covers the exact path and expires.
+ *   3. this: `proxy/` serves the file directly, authenticated by the browser's Open WebUI
+ *      session cookie, and only from the caller's own workspace home. No copy, no public
+ *      directory, and nobody else can read the URL.
  *
  * Uploads are still used as a fallback when no proxy is configured, so the tool never
  * silently does nothing.
  */
-import { createHmac } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -51,10 +51,6 @@ interface DisplayParams {
 
 export interface DisplayOptions {
 	proxyUrl: string;
-	proxySecret: string;
-	/** Proxy-side path of this workspace's home; the container path is rewritten onto it. */
-	proxyRoot: string;
-	proxyTtlSeconds?: number;
 }
 
 export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient, options: DisplayOptions): void {
@@ -92,32 +88,13 @@ export function registerDisplayTool(pi: ExtensionAPI, client: OwuiClient, option
 				const bytes = await readFile(absolute);
 				const type = MIME_TYPES[extension] ?? "application/octet-stream";
 
-				if (options.proxyUrl && options.proxySecret) {
-					// The proxy resolves paths in its own layout, so sign what it will open.
-					if (!options.proxyRoot) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: "OPEN_WEBUI_FILE_PROXY_ROOT is not set, so the proxy cannot map /home/user to its own filesystem. Set it to how the proxy sees this home (for example /homes/terminals/<user-id>).",
-								},
-							],
-							details: { action, ok: false, error: "proxy root missing" },
-							isError: true,
-						};
-					}
-					const proxyPath = `${options.proxyRoot}${absolute.slice(HOME.length)}`;
-					const expiry = Math.floor(Date.now() / 1000) + (options.proxyTtlSeconds ?? 3600);
-					const signature = createHmac("sha256", options.proxySecret)
-						.update(`${proxyPath}\n${expiry}`)
-						.digest("hex");
-					const url = `${options.proxyUrl}/f?p=${encodeURIComponent(proxyPath)}&e=${expiry}&s=${signature}`;
+				if (options.proxyUrl) {
+					// The proxy authenticates with the browser's own Open WebUI cookie and
+					// maps the path onto the caller's home, so no secret belongs in the URL.
+					const url = `${options.proxyUrl}/f?p=${encodeURIComponent(absolute)}`;
 					const label = String(params.alt ?? name);
 					const markdown = INLINE_IMAGE.has(extension) ? `![${label}](${url})` : `[${label}](${url})`;
-					return ok(
-						action,
-						`Served through the signed file proxy, valid for ${Math.round((options.proxyTtlSeconds ?? 3600) / 60)} min.\n\nInclude this markdown in your reply:\n${markdown}`,
-					);
+					return ok(action, `Include this markdown in your reply:\n${markdown}`);
 				}
 
 				const form = new FormData();

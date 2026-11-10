@@ -12,9 +12,6 @@ export interface Config {
 	timeoutMs: number;
 	/** Signed-URL file proxy used by owui_display (empty = feature disabled). */
 	fileProxyUrl: string;
-	fileProxySecret: string;
-	/** How the proxy sees this workspace's home, e.g. /homes/terminals/<user-id>. */
-	fileProxyRoot: string;
 	/** Materialize Open WebUI skills/prompts into Pi resource paths. */
 	resources: boolean;
 	resourcesTtlMs: number;
@@ -40,8 +37,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 		maxChars: positiveNumber(env.OPEN_WEBUI_MAX_CHARS, 12000),
 		timeoutMs: positiveNumber(env.OPEN_WEBUI_TIMEOUT_MS, 60000),
 		fileProxyUrl: (env.OPEN_WEBUI_FILE_PROXY_URL || "").replace(/\/+$/, ""),
-		fileProxySecret: (env.OPEN_WEBUI_FILE_PROXY_SECRET || "").trim(),
-		fileProxyRoot: (env.OPEN_WEBUI_FILE_PROXY_ROOT || "").replace(/\/+$/, ""),
 		resources: isOn(env.OPEN_WEBUI_RESOURCES, true),
 		resourcesTtlMs: positiveNumber(env.OPEN_WEBUI_RESOURCES_TTL_MIN, 15) * 60_000,
 		debug: isOn(env.OPEN_WEBUI_DEBUG, false),
