@@ -51,23 +51,50 @@ PATCH = """        await self.flush(force=True)
             # so it must not also steal the side panel.
             inline = candidate.get("displayed") is True or arguments.get("inline") is True
 
-            if path and not inline:
-                log.info("agent display_file -> emitting terminal:display_file for %s", path)
-                if self.emitter:
-                    await self.emitter(
-                        {
-                            "type": "terminal:display_file",
-                            "data": {"path": path, **({"page": page} if page else {})},
-                        }
-                    )
+            if path:
+                mime_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+                terminal_selector = self.metadata.get("terminal_id")
+                file_item = {
+                    "type": "file",
+                    "source": "open_terminal",
+                    "terminal_selector": terminal_selector,
+                    "session_id": self.metadata.get("chat_id"),
+                    "path": path,
+                    "full_path": path,
+                    "name": os.path.basename(path),
+                    "mime_type": mime_type,
+                    "content_type": mime_type,
+                    "exists": True,
+                    "displayed": inline,
+                    **({"page": page} if page else {}),
+                    **({"terminal_id": terminal_selector} if terminal_selector else {}),
+                }
+                # The chat frontend builds its file card from this shape, so replace the
+                # plain tool output instead of appending a second item.
+                for entry in reversed(self.items):
+                    if entry.get("type") == "function_call_output" and entry.get("call_id") == call_id:
+                        entry["output"] = [{"type": "input_text", "text": json.dumps(file_item)}]
+                        break
+
+                if inline:
+                    log.info("agent display_file -> inline render for %s", path)
                 else:
-                    log.warning("agent display_file -> no emitter for chat %s", self.metadata.get("chat_id"))
+                    log.info("agent display_file -> emitting terminal:display_file for %s", path)
+                    if self.emitter:
+                        await self.emitter(
+                            {
+                                "type": "terminal:display_file",
+                                "data": {"path": path, **({"page": page} if page else {})},
+                            }
+                        )
+                    else:
+                        log.warning("agent display_file -> no emitter for chat %s", self.metadata.get("chat_id"))
 
     async def approve("""
 
 LOGGER_IMPORT = ('from open_webui.utils.tool_permissions import requires_tool_approval\n',
                  'from open_webui.utils.tool_permissions import requires_tool_approval\n\nlog = logging.getLogger(__name__)\n')
-LOGGING_IMPORT = ("import json\n", "import json\nimport logging\n")
+LOGGING_IMPORT = ("import json\n", "import json\nimport logging\nimport mimetypes\nimport os\n")
 
 
 def main(path: str) -> int:
