@@ -26,23 +26,39 @@ ANCHOR = """        await self.flush(force=True)
 PATCH = """        await self.flush(force=True)
 
         # Agent tool calls must open the file panel just like terminal tool calls do.
+        # Providers hand us different shapes, so accept the path from the result payload
+        # or, like the chat tool path, from the call arguments.
         if done and name == "display_file":
-            payload = result
-            if isinstance(payload, str):
+            candidate = result
+            if isinstance(candidate, str):
                 try:
-                    payload = json.loads(payload)
+                    candidate = json.loads(candidate)
                 except Exception:
-                    payload = None
-            path = payload.get("path") if isinstance(payload, dict) else None
-            page = payload.get("page") if isinstance(payload, dict) else None
-            if path and self.emitter:
+                    candidate = None
+            if not isinstance(candidate, dict):
+                candidate = {}
+            if not isinstance(candidate.get("path"), str):
+                for key in ("structuredContent", "structured_content", "details", "output"):
+                    nested = candidate.get(key)
+                    if isinstance(nested, dict) and isinstance(nested.get("path"), str):
+                        candidate = nested
+                        break
+
+            arguments = arguments if isinstance(arguments, dict) else {}
+            path = candidate.get("path") if isinstance(candidate.get("path"), str) else arguments.get("path")
+            page = candidate.get("page") or arguments.get("page")
+
+            if path:
                 log.info("agent display_file -> emitting terminal:display_file for %s", path)
-                await self.emitter(
-                    {
-                        "type": "terminal:display_file",
-                        "data": {"path": path, **({"page": page} if page else {})},
-                    }
-                )
+                if self.emitter:
+                    await self.emitter(
+                        {
+                            "type": "terminal:display_file",
+                            "data": {"path": path, **({"page": page} if page else {})},
+                        }
+                    )
+                else:
+                    log.warning("agent display_file -> no emitter for chat %s", self.metadata.get("chat_id"))
 
     async def approve("""
 
