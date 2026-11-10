@@ -17,7 +17,7 @@ RAG, no skills. This extension closes that gap from the agent side.
 | `owui_memory` | `list`, `search`, `add`, `update`, `delete` | Read/write, mirroring the `/api/v1/memories` surface |
 | `owui_web` | `search`, `fetch` | Open WebUI's own search engine and URL loader, through `/api/v1/retrieval/*` |
 | `owui_ask` | — | Blocks on a Pi dialog; Open WebUI renders it as its own `ask_user` prompt |
-| `display_file` | — | Opens a workspace file in Open WebUI's file panel (needs `patches/`) |
+| `display_file` | — | Opens a workspace file in Open WebUI's file panel, or renders it inline with `inline: true` (needs `patches/`) |
 | `owui_chat` | `current`, `rename` | Finds its own conversation by matching `PI_SESSION_ID` against `meta.agent.session_id` |
 
 ## Resources (skills + prompt templates)
@@ -167,8 +167,9 @@ Discovered while building against 0.13.3 — each of these is a real trap:
   directory. That emission only existed for chat tool-server calls, so an agent tool named
   `display_file` showed a card instead; `patches/agent_display_file.py` adds the same
   emission to `Output.tool()` (the choke point for every agent provider). The panel needs
-  `terminalFileDisplay = "sidebar"` (the default). Without the patch the tool is harmless
-  but only renders a card.
+  `terminalFileDisplay = "sidebar"` (the default) unless the tool is called with
+  `inline: true`, which mirrors the chat tool path: the result is rendered in the reply and
+  the panel is left alone. Without the patch the tool is harmless but only renders a card.
 
 ## Acting on the running conversation
 

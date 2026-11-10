@@ -47,8 +47,11 @@ PATCH = """        await self.flush(force=True)
             arguments = arguments if isinstance(arguments, dict) else {}
             path = candidate.get("path") if isinstance(candidate.get("path"), str) else arguments.get("path")
             page = candidate.get("page") or arguments.get("page")
+            # Same rule as the chat tool path: an inline result is rendered in the message,
+            # so it must not also steal the side panel.
+            inline = candidate.get("displayed") is True or arguments.get("inline") is True
 
-            if path:
+            if path and not inline:
                 log.info("agent display_file -> emitting terminal:display_file for %s", path)
                 if self.emitter:
                     await self.emitter(

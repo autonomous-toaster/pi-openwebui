@@ -21,6 +21,7 @@ const HOME = "/home/user";
 interface DisplayParams {
 	path?: unknown;
 	page?: unknown;
+	inline?: unknown;
 }
 
 export function registerDisplayTool(pi: ExtensionAPI): void {
@@ -37,6 +38,12 @@ export function registerDisplayTool(pi: ExtensionAPI): void {
 		parameters: Type.Object({
 			path: Type.String({ description: "Absolute path of the file to show, e.g. /home/user/out/chart.png" }),
 			page: Type.Optional(Type.Number({ description: "For PDF/DOCX/PPTX, the 1-based page to open" })),
+			inline: Type.Optional(
+				Type.Boolean({
+					description:
+						"Render the file inside the reply instead of opening the side panel. Default false (panel).",
+				}),
+			),
 		}),
 
 		async execute(_toolCallId, params: DisplayParams) {
@@ -57,16 +64,25 @@ export function registerDisplayTool(pi: ExtensionAPI): void {
 					return ok(action, `${requested} does not exist.`);
 				}
 
-				// Shape expected by the backend when it emits terminal:display_file.
+				// Shape the backend reads: `displayed: true` means "render inline", anything
+				// else means "open the side panel".
+				const inline = params.inline === true;
 				const payload = {
 					path: absolute,
 					exists: true,
-					displayed: true,
+					displayed: inline,
 					...(typeof params.page === "number" ? { page: params.page } : {}),
 				};
 				return {
-					content: [{ type: "text", text: `Opened ${absolute} in the file panel.` }],
-					details: { action, ok: true, path: absolute },
+					content: [
+						{
+							type: "text",
+							text: inline
+								? `Rendered ${absolute} inline in the reply.`
+								: `Opened ${absolute} in the file panel.`,
+						},
+					],
+					details: { action, ok: true, path: absolute, inline },
 					structuredContent: payload,
 				};
 			} catch (err) {
