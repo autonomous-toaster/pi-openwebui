@@ -66,12 +66,6 @@ Pi arguments or list it in `~/.pi/agent/settings.json`:
 { "packages": ["/opt/pi-openwebui"] }
 ```
 
-## Open WebUI custom tools
-
-`owui-tools/` holds tools that run **inside** Open WebUI, versioned next to the extension
-that consumes Open WebUI's data. See `owui-tools/README.md` for the format, the install
-steps, and which builtins are deliberately not bridged.
-
 ## Running inside an open-terminal workspace
 
 The image used by the agent container bakes the package at `/opt/pi-openwebui` and seeds
